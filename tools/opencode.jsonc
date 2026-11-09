@@ -1,0 +1,60 @@
+// opencode configuration for driving /libvox-mcp from an agent.
+//
+// Copy to ~/.config/opencode/opencode.jsonc, or point opencode at this file.
+// It is versioned here so the working configuration is not something each
+// person reconstructs from the README, and so the one rule that matters is
+// enforced by the file itself: NO CREDENTIAL IS WRITTEN HERE.
+//
+//   ./tools/libvox-agent.sh lib-adminkuhn
+//
+// That script decrypts one library's ILS credentials out of the Tenant DB and
+// exports them, then launches opencode. There is deliberately no `environment`
+// block below: the MCP server inherits the environment of the process that
+// spawns it, so the credentials arrive without ever being written here.
+//
+// Hardcoding them instead is how a client secret ends up in a screenshot, a
+// dotfiles repository, or a commit -- which is exactly what happened to the
+// configuration this file replaces.
+//
+// It also removes a question nobody could answer by reading: whether opencode
+// expands {env:...} inside `mcp.environment` specifically. Inheritance needs no
+// such feature.
+//
+// The trade: running `opencode` by hand, outside the script, finds no
+// credentials at all. That is the intended failure -- it fails immediately and
+// obviously, rather than quietly using whatever library someone configured
+// months ago.
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "provider": {
+    "openwebui": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama (remoto)",
+      "options": {
+        "baseURL": "http://177.66.206.20:3000/api",
+        "apiKey": "{env:OPENWEBUI_API_KEY}"
+      },
+      "models": {
+        "qwen3.6:35b-a3b": { "name": "qwen3.6:35b-a3b" }
+      }
+    }
+  },
+
+  "mcp": {
+    "libvox-koha": {
+      "type": "local",
+      "command": [
+        "/home/battisti/miniconda3/envs/libvox-mcp/bin/python",
+        "-m",
+        "libvox_mcp"
+      ],
+      "enabled": true,
+
+      // The default is 5000 ms. The first tool call fetches an OAuth2 token
+      // from Koha before running the query, and check_availability also
+      // resolves the branch list. A cold Koha passes 5s easily.
+      "timeout": 30000
+    }
+  }
+}

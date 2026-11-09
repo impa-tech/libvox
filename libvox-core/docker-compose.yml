@@ -1,0 +1,110 @@
+# Local stack for /libvox-core.
+#
+#   docker compose build core
+#   docker compose up core            # then http://127.0.0.1:8091/healthz
+#
+# Both databases belong to other modules and are brought up from there:
+#   cd ../libvox-sync   && docker compose up -d postgres    # Discovery Index
+#   cd ../libvox-portal && docker compose up -d postgres    # Tenant DB
+# The project name, and therefore half of every container's name: compose builds
+# them as `<project>-<service>-<index>` and derives the project from whichever
+# directory this file happens to sit in. That is the same objection the `image:`
+# line below answers -- a derived name is an accident of the checkout, and
+# `docker exec libvox-core-... ` in a README stops working for anyone who cloned into a
+# folder named differently.
+#
+# Pinned to what it already derives here, so nothing on an existing host is
+# renamed. What changes is that it stays true somewhere else.
+name: libvox-core
+
+services:
+  core:
+    # Named, rather than left to compose's default of <project>-<service>. A
+    # derived name is an accident of the directory this file sits in; a chosen
+    # one is the artifact, and is what a registry tag or a pinned version would
+    # address. /libvox-sync had two services deriving two names from one
+    # Dockerfile, and they drifted -- see the comment there.
+    #
+    # LIBVOX_VERSION is inert: nothing sets it, and the default reproduces
+    # today's behaviour exactly.
+    image: libvox-core:${LIBVOX_VERSION:-dev}
+    # Context is the repository root: Core imports /libvox-sync and
+    # /libvox-driver-koha, and a build context cannot reach outside itself.
+    build:
+      context: ..
+      dockerfile: libvox-core/Dockerfile
+    networks: [default, libvox_internal]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # 127.0.0.1 inside a container is the container, so both databases are
+      # reached through the host's published ports.
+      LIBVOX_DB_DSN: ${LIBVOX_DB_DSN_DOCKER:-postgresql://libvox_app:libvox_app@postgres:5432/libvox_index}
+      LIBVOX_TENANT_DB_DSN: ${LIBVOX_TENANT_DB_DSN_DOCKER:-postgresql://libvox_app:libvox_app@postgres:5432/libvox_tenant}
+      # Core's own database, on the Tenant DB's instance. Named here for the
+      # same reason as the two above: the default is 127.0.0.1, and inside a
+      # container that is the container.
+      LIBVOX_CONVERSATION_DB_DSN: ${LIBVOX_CONVERSATION_DB_DSN_DOCKER:-postgresql://libvox_app:libvox_app@postgres:5432/libvox_conversations}
+      # The tool layer, which the agent is a client of. Also on the host.
+      # The tool layer is a container of its own now, on libvox_internal.
+      # host.docker.internal was right while it ran loose on the host, and
+      # is still the override for running it there during development:
+      #   LIBVOX_MCP_URL_DOCKER=http://host.docker.internal:8000/mcp
+      LIBVOX_MCP_URL: ${LIBVOX_MCP_URL_DOCKER:-http://mcp:8000/mcp}
+      # The model. Empty by default: a container with no model configured
+      # answers that it cannot reach one, which is true.
+      LIBVOX_LLM_BASE_URL: ${LIBVOX_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+      LIBVOX_LLM_MODEL: ${LIBVOX_LLM_MODEL:-qwen3:14b}
+      LIBVOX_LLM_API_KEY: ${LIBVOX_LLM_API_KEY:-}
+      # Extra JSON merged into every model request, unread by Core. Where a
+      # thinking control goes, since every vendor spells it differently. Empty
+      # by default, which sends exactly what was always sent.
+      LIBVOX_LLM_EXTRA_BODY: ${LIBVOX_LLM_EXTRA_BODY:-}
+
+      # Byte-identical to /libvox-portal's, or nothing decrypts.
+      LIBVOX_CRYPTO_KEY: ${LIBVOX_CRYPTO_KEY:?set LIBVOX_CRYPTO_KEY in .env}
+
+      # Required outside development, and the service refuses to start without
+      # it: /internal/v1 takes tenant_id from the request body.
+      # The embedding service, for the vector half of the search index.
+      # Unset means the index is built without vectors and every search is
+      # answered by the lexical arm alone -- which is what this did before.
+      # Here as well as in the worker: the search runs in this process.
+      # Defaults to the chat gateway, which is the same service in every
+      # deployment so far -- one credential, configured once. Both halves are
+      # still overridable, because "the same" is a fact about today.
+      LIBVOX_EMBEDDING_BASE_URL: ${LIBVOX_EMBEDDING_BASE_URL:-${LIBVOX_LLM_BASE_URL:-}}
+      LIBVOX_EMBEDDING_MODEL: ${LIBVOX_EMBEDDING_MODEL:-}
+      LIBVOX_EMBEDDING_API_KEY: ${LIBVOX_EMBEDDING_API_KEY:-${LIBVOX_LLM_API_KEY:-}}
+      LIBVOX_CORE_SERVICE_TOKEN: ${LIBVOX_CORE_SERVICE_TOKEN:-}
+      LIBVOX_ENV: ${LIBVOX_ENV:-development}
+      LIBVOX_LOG_LEVEL: INFO
+    # Published to loopback, deliberately. This surface selects a tenant from
+    # its own request body and must never be reachable from the network.
+    ports:
+      # Internal: loopback, and that is the security boundary. This surface
+      # takes tenant_id from the request body.
+      - "127.0.0.1:8091:8091"
+      # Public: a reader's browser has to reach it. A different application
+      # with none of the internal routes on it -- see create_public_app.
+      #
+      # LIBVOX_BIND is the interface and defaults to 0.0.0.0, which is what this
+      # has always been. Behind a reverse proxy set it to 127.0.0.1: the proxy
+      # reaches `core` by name over libvox_internal.
+      - "${LIBVOX_BIND:-0.0.0.0}:8092:8092"
+
+# A network the portal and Core share, so the portal can ask Core whether a
+# library's catalogue connection works.
+#
+# Not a published port: 8091 stays bound to the host's loopback, which is the
+# security boundary -- that surface takes tenant_id from its request body.
+# Publishing it on the docker bridge to make this call possible would open it
+# to every container on the host. On a shared network the two reach each other
+# by service name and nothing is exposed at all.
+#
+# Declared in both compose files with the same name. Whichever comes up first
+# creates it; neither depends on the other having run.
+networks:
+  libvox_internal:
+    name: libvox_internal
+    external: true

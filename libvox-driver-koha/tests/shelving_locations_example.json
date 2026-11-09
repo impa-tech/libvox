@@ -1,0 +1,10 @@
+[
+  {"authorised_value_id": 1, "category_name": "LOC", "value": "GEN",
+   "description": "General stacks", "opac_description": null, "image_url": null},
+  {"authorised_value_id": 2, "category_name": "LOC", "value": "REF",
+   "description": "Reference", "opac_description": "Consulta local", "image_url": null},
+  {"authorised_value_id": 3, "category_name": "LOC", "value": "AV",
+   "description": "Audio visual", "opac_description": null, "image_url": null},
+  {"authorised_value_id": 4, "category_name": "LOC", "value": "STAFF",
+   "description": "Staff office", "opac_description": null, "image_url": null}
+]

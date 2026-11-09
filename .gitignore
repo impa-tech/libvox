@@ -1,0 +1,16 @@
+# Internal working documents. They live beside the code on the maintainer's
+# machine and stay out of the repository: planning notes that change daily, the
+# deployment plan with its LaTeX build artifacts, and a reference bibliography
+# of third-party papers that is not ours to redistribute.
+docs/artigos/
+docs/planos/
+docs/plano_implantacao/
+docs/ideias_artigos_academicos.md
+docs/plano_libvox_sync_write_side.md
+docs/inscricao_fundo_codex.md
+
+# Personal agent wrappers, editor state, and anything that leaks how one person
+# works. See "Never commit" in AGENTS.md.
+agy.sh
+claude.sh
+.$*.bkp

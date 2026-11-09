@@ -1,0 +1,122 @@
+# Local stack for /libvox-portal.
+#
+#   cd ../libvox-db && ./db.sh
+#   docker compose run --rm portal php artisan migrate --database=pgsql_admin
+#   docker compose up portal          # then http://localhost:8090/admin
+#
+# The databases are not here. /libvox-db owns the one PostgreSQL server, and
+# `./db.sh` has to be up first. Running artisan on the host works too; .env
+# points at 127.0.0.1:5435 and the container overrides it with `postgres:5432`,
+# because 127.0.0.1 inside a container is the container.
+#
+# The Tenant DB is a separate database from the Discovery Index and nothing
+# joins across the two -- see the README, "Two databases, and why".
+
+# The project name, and therefore half of every container's name: compose builds
+# them as `<project>-<service>-<index>` and derives the project from whichever
+# directory this file happens to sit in. That is the same objection the `image:`
+# line below answers -- a derived name is an accident of the checkout, and
+# `docker exec libvox-portal-... ` in a README stops working for anyone who cloned into a
+# folder named differently.
+#
+# Pinned to what it already derives here, so nothing on an existing host is
+# renamed. What changes is that it stays true somewhere else.
+name: libvox-portal
+
+services:
+  portal:
+    # Named, rather than left to compose's default of <project>-<service>. A
+    # derived name is an accident of the directory this file sits in; a chosen
+    # one is the artifact, and is what a registry tag or a pinned version would
+    # address. /libvox-sync had two services deriving two names from one
+    # Dockerfile, and they drifted -- see the comment there.
+    #
+    # LIBVOX_VERSION is inert: nothing sets it, and the default reproduces
+    # today's behaviour exactly.
+    image: libvox-portal:${LIBVOX_VERSION:-dev}
+    build: .
+    # No `depends_on` for the database: it lives in /libvox-db, and compose
+    # cannot wait on a service in another project. ./portal.sh checks instead,
+    # and names what is down rather than letting the container fail alone.
+    networks: [default, libvox_internal]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # `postgres` resolves on libvox_internal, where /libvox-db publishes it.
+      LIBVOX_TENANT_DB_DSN: postgresql://libvox_app:libvox_app@postgres:5432/libvox_tenant
+      LIBVOX_TENANT_DB_ADMIN_DSN: postgresql://libvox:libvox@postgres:5432/libvox_tenant
+      # Read-only, and unprivileged so row-level security applies. A superuser
+      # here would show every library's catalogue to every librarian.
+      # A different variable name from the one in .env, on purpose: compose
+      # substitutes from .env too, and that file holds the host's 127.0.0.1
+      # form -- which inside a container is the container. Same arrangement, and
+      # the same reason, as /libvox-core's compose file.
+      # The conversation log, on this same instance -- so no host gateway,
+      # unlike the Discovery Index above. Read-only, and unprivileged so the
+      # operator panel reads one library at a time rather than all of them.
+      # Core publishes its internal API on the host's loopback, so from in here
+      # it is the host gateway. One call: the catalogue connection test.
+      # By service name on the shared network, not through the host: 8091 is
+      # published to the host's loopback only, so host.docker.internal cannot
+      # reach it -- correctly, and that is the boundary rather than an
+      # oversight.
+      LIBVOX_CORE_URL: ${LIBVOX_CORE_URL_DOCKER:-http://core:8091}
+      LIBVOX_CORE_SERVICE_TOKEN: ${LIBVOX_CORE_SERVICE_TOKEN:-}
+      LIBVOX_CONVERSATION_DB_DSN: postgresql://libvox_app:libvox_app@postgres:5432/libvox_conversations
+      LIBVOX_DISCOVERY_DB_DSN: ${LIBVOX_DISCOVERY_DB_DSN_DOCKER:-postgresql://libvox_app:libvox_app@postgres:5432/libvox_index}
+      # Neither is ever baked into the image; .dockerignore excludes .env.
+      LIBVOX_CRYPTO_KEY: ${LIBVOX_CRYPTO_KEY:?set LIBVOX_CRYPTO_KEY in .env}
+      APP_KEY: ${APP_KEY:?run `php artisan key:generate`}
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL:-http://localhost:8090}
+
+      # **The container has no .env.** It is in .dockerignore, deliberately --
+      # secrets do not belong in an image -- so Laravel reads real environment
+      # variables and nothing else, and a variable absent from this list simply
+      # does not exist inside. Setting it in .env changes what compose
+      # interpolates here and nothing more.
+      #
+      # Both default to empty, which is the behaviour before either existed.
+      #
+      # Without TRUSTED_PROXIES behind a TLS-terminating proxy, Laravel sees the
+      # plain-HTTP hop from the proxy and every URL it generates says http --
+      # including Filament's stylesheets, which a browser then refuses to load
+      # into an https page as mixed content, and the panel renders unstyled.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      # The address the generated embed snippet points at. Left empty, the
+      # Assistant page derives it from the request; behind a proxy that scheme
+      # is the proxy's rather than the reader's, so there it is set.
+      LIBVOX_WIDGET_URL: ${LIBVOX_WIDGET_URL:-}
+      LIBVOX_WIDGET_PORT: ${LIBVOX_WIDGET_PORT:-8092}
+      SESSION_DRIVER: file
+      CACHE_STORE: file
+      QUEUE_CONNECTION: sync
+    # Host port 8090: 8080 and 8081 are Koha Testing Docker's OPAC and staff
+    # interfaces, and a developer working on this project has one running. Same
+    # reasoning that put the databases on 5433 and 5434.
+    ports:
+      # The interface, not the port. Unset it and this is `0.0.0.0`, which is
+      # what it has always been -- a laptop is unaffected. Behind a reverse
+      # proxy set LIBVOX_BIND=127.0.0.1: the proxy reaches the container by name
+      # over libvox_internal, so nothing here needs to be on the network, and
+      # leaving it there would offer the same panel over plain HTTP beside the
+      # one with TLS.
+      - "${LIBVOX_BIND:-0.0.0.0}:8090:8080"
+
+
+# A network the portal and Core share, so the portal can ask Core whether a
+# library's catalogue connection works.
+#
+# Not a published port: 8091 stays bound to the host's loopback, which is the
+# security boundary -- that surface takes tenant_id from its request body.
+# Publishing it on the docker bridge to make this call possible would open it
+# to every container on the host. On a shared network the two reach each other
+# by service name and nothing is exposed at all.
+#
+# Declared in both compose files with the same name. Whichever comes up first
+# creates it; neither depends on the other having run.
+networks:
+  libvox_internal:
+    name: libvox_internal
+    external: true

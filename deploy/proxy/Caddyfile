@@ -1,0 +1,28 @@
+# TLS in front of the two surfaces that face people.
+#
+# Caddy asks Let's Encrypt for a certificate on the first request to each name
+# and redirects HTTP to HTTPS afterwards. Both hostnames must already resolve to
+# this host, and a certificate cannot be issued for a bare IP address -- that is
+# the prerequisite, not a detail.
+#
+# It reaches the containers **by name over libvox_internal**, not through the
+# host's published ports. So on a proxied host those ports do not need to be on
+# the network at all: set LIBVOX_BIND=127.0.0.1 and the only thing listening
+# publicly is Caddy, on 80 and 443.
+
+# The panels. Librarians and the operator sign in here, which is the traffic
+# that most needs the TLS: without it a password crosses the network in clear.
+{$LIBVOX_PORTAL_DOMAIN} {
+	reverse_proxy portal:8080
+}
+
+# The reader's side: widget.js, the WebSocket, and the health check. Core's
+# public application serves exactly those three paths and nothing else -- the
+# internal API is a separate ASGI app on a separate port, and is not reachable
+# from here even by accident.
+#
+# The WebSocket needs no configuration. Caddy passes the Upgrade through, and
+# widget.js derives `wss:` from the `https:` of its own script tag.
+{$LIBVOX_WIDGET_DOMAIN} {
+	reverse_proxy core:8092
+}

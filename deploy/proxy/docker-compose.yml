@@ -1,0 +1,62 @@
+# TLS termination, and nothing else.
+#
+#   LIBVOX_PORTAL_DOMAIN=libvox.example.org \
+#   LIBVOX_WIDGET_DOMAIN=marcia.example.org \
+#     docker compose up -d
+#
+# A compose project of its own, and deliberately not part of the stack ./up.sh
+# starts by default: a laptop has no domain, needs no certificate, and would get
+# a Caddy failing to answer a challenge every few minutes. ./up.sh starts it when
+# the two domain variables are set and says it skipped it when they are not.
+#
+# The two names must already resolve to this host. Let's Encrypt does not issue
+# for a bare IP address, so without DNS there is nothing here to run.
+
+# The project name, for the reason every module's compose file gives: compose
+# derives it from the directory, and this one is called `proxy` -- a name
+# generic enough to collide with somebody else's project on a shared host.
+#
+# **This one does rename an existing container**, unlike the modules, which were
+# pinned to what they already derived. A host already serving TLS has a
+# `proxy-caddy-1` that compose can no longer see under the new project, and it
+# still holds 80 and 443. Once, on that host:
+#
+#     docker rm -f proxy-caddy-1
+#
+# Then `./deploy/up.sh` starts it again as `libvox-proxy-caddy-1`.
+name: libvox-proxy
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      # No defaults on purpose. A wrong hostname is a certificate request that
+      # fails against a rate limit, and a placeholder value would produce one
+      # without anybody choosing it.
+      LIBVOX_PORTAL_DOMAIN: ${LIBVOX_PORTAL_DOMAIN:?the panel's hostname, e.g. libvox.example.org}
+      LIBVOX_WIDGET_DOMAIN: ${LIBVOX_WIDGET_DOMAIN:?the widget's hostname, e.g. marcia.example.org}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and account keys. Losing this volume means asking Let's
+      # Encrypt for everything again on the next start, and their rate limit is
+      # per registered domain per week -- a restart loop without it is how a
+      # host ends up unable to get a certificate for days.
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - libvox_internal
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+# Where `portal` and `core` answer. Created by /libvox-db, which is up before
+# anything that would need proxying.
+networks:
+  libvox_internal:
+    name: libvox_internal
+    external: true

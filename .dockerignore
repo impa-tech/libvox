@@ -1,0 +1,23 @@
+# Build context for /libvox-sync, whose Dockerfile is built from this
+# directory rather than its own: it imports /libvox-driver-koha, and a Docker
+# context cannot reach outside itself.
+#
+# An allow-list, not a deny-list. Denying the heavy directories by name works
+# until someone adds a new one, and the failure is silent — a slower build and
+# a fatter context that nobody notices. Starting from nothing means a new
+# module is excluded by default and has to be named to get in.
+
+*
+
+!libvox-sync
+!libvox-driver-koha
+!libvox-core
+
+# Nothing below belongs in an image, and .env in particular must never be
+# baked into one.
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.env
+**/*.egg-info

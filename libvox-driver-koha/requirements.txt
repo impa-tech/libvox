@@ -1,0 +1,2 @@
+# Runtime dependencies. Keep in sync with pyproject.toml.
+httpx2>=2.10,<3

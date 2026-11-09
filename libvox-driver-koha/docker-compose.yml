@@ -1,0 +1,42 @@
+# One-shot container: it runs a command and exits. There is no service to keep
+# up, because the driver holds nothing between invocations.
+#
+#   docker compose run --rm driver get-biblio --id 1
+#
+# The project name, and therefore half of every container's name: compose builds
+# them as `<project>-<service>-<index>` and derives the project from whichever
+# directory this file happens to sit in. That is the same objection the `image:`
+# line below answers -- a derived name is an accident of the checkout, and
+# `docker exec libvox-driver-koha-... ` in a README stops working for anyone who cloned into a
+# folder named differently.
+#
+# Pinned to what it already derives here, so nothing on an existing host is
+# renamed. What changes is that it stays true somewhere else.
+name: libvox-driver-koha
+
+services:
+  driver:
+    # Named, rather than left to compose's default of <project>-<service>. A
+    # derived name is an accident of the directory this file sits in; a chosen
+    # one is the artifact, and is what a registry tag or a pinned version would
+    # address. /libvox-sync had two services deriving two names from one
+    # Dockerfile, and they drifted -- see the comment there.
+    #
+    # LIBVOX_VERSION is inert: nothing sets it, and the default reproduces
+    # today's behaviour exactly.
+    image: libvox-driver-koha:${LIBVOX_VERSION:-dev}
+    build: .
+    env_file:
+      - .env
+    environment:
+      LIBVOX_LOG_LEVEL: ${LIBVOX_LOG_LEVEL:-INFO}
+      # `.env` holds the host-native URL, so running the CLI outside a
+      # container works with no override. Set KOHA_URL_DOCKER when the two
+      # differ — pointing at a Koha on the host is the usual case, since
+      # 127.0.0.1 inside a container is the container.
+      KOHA_URL: ${KOHA_URL_DOCKER:-${KOHA_URL}}
+    # A Koha on the host is not reachable from inside the container as
+    # 127.0.0.1. With this, KOHA_URL=http://host.docker.internal:8081 works on
+    # Linux as well as on Docker Desktop.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

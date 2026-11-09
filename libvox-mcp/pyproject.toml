@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "libvox-mcp"
+version = "0.1.0"
+description = "MCP server exposing a library's catalog to any LLM"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "AGPL-3.0-or-later"
+
+# The copyright holder, which PEP 621 gives no field of its own. IMPA Tech holds
+# it, together with the LibVox team; the second entry is the technical contact.
+# Worth stating in the metadata rather than only in prose: the commercial
+# exception to the licence above is IMPA Tech's to grant, and nobody else's.
+authors = [
+    { name = "IMPA Tech" },
+    { name = "Anselmo Luiz Éden Battisti", email = "anselmo.battisti@impatech.edu.br" },
+]
+
+# Keep in sync with requirements.txt.
+dependencies = [
+    "mcp[cli]>=2.0,<3",
+    "httpx2>=2.10,<3",
+    "pydantic>=2.11,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=1.0", "ruff>=0.6,<0.17"]
+
+# EXPERIMENT (temporary): the direct-Koha backend. Not a runtime dependency of
+# the production path — Core owns every ILS integration there. Install the
+# sibling package editable:
+#   pip install -e ../libvox-driver-koha
+koha = ["libvox-driver-koha>=0.1"]
+
+[project.scripts]
+libvox-mcp = "libvox_mcp.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/libvox_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+# The rule set is stated rather than inherited. Ruff's default selection has
+# widened across releases, so an unpinned `ruff` silently changes what CI
+# enforces — new findings appear in code nobody touched. Widening this list is
+# a deliberate change with its own PR.
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

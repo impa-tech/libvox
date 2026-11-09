@@ -1,0 +1,9 @@
+# An allow-list would be overkill here: the context is one module, and the
+# things that must never reach an image are few and named.
+.env
+.env.*
+tests
+.pytest_cache
+.ruff_cache
+**/__pycache__
+**/*.pyc

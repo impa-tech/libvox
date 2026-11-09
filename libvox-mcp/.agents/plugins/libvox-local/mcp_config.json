@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "libvox-mcp": {
+      "command": "/home/battisti/miniconda3/envs/libvox-mcp/bin/python",
+      "args": [
+        "-m",
+        "libvox_mcp"
+      ],
+      "env": {
+        "LIBVOX_MCP_BACKEND": "koha",
+        "KOHA_URL": "http://127.0.0.1:8081",
+        "KOHA_CLIENT_ID": "1fcc757f-db7a-4f55-b1c9-b8f354107019",
+        "KOHA_CLIENT_SECRET": "6b3923cb-15c1-4ac9-a9fe-046e53156931"
+      }
+    }
+  }
+}

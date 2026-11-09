@@ -1,0 +1,138 @@
+# Local stack for /libvox-sync.
+#
+#   cd ../libvox-db && ./db.sh
+#   docker compose run --rm sync migrate
+#
+# The Discovery Index is not here. /libvox-db owns the one PostgreSQL server,
+# and this module owns the database on it -- `libvox_index`, whose schema and
+# generations are written by nothing else.
+
+# The project name, and therefore half of every container's name: compose builds
+# them as `<project>-<service>-<index>` and derives the project from whichever
+# directory this file happens to sit in. That is the same objection the `image:`
+# line below answers -- a derived name is an accident of the checkout, and
+# `docker exec libvox-sync-... ` in a README stops working for anyone who cloned into a
+# folder named differently.
+#
+# Pinned to what it already derives here, so nothing on an existing host is
+# renamed. What changes is that it stays true somewhere else.
+name: libvox-sync
+
+services:
+  sync:
+    # **One image, named the same as the worker's, and that is the point.**
+    #
+    # These two services are the same program -- `python -m libvox_sync` --
+    # differing only in `command`, `restart` and `profiles`, which are runtime
+    # concerns. Without an explicit `image:`, compose names one per service and
+    # builds twice, and the two can drift because different code paths build
+    # them: ./sync.sh builds `sync`, ./worker.sh builds `worker`.
+    #
+    # That drift is not hypothetical. The `sync` image once held three
+    # migrations while `worker` was current, so `migrate` applied the three it
+    # could see and reported "schema already up to date" -- and an import died
+    # hours later on the `series` column that 004 would have created. Sharing
+    # the name means either build updates the one thing both services run.
+    #
+    # LIBVOX_VERSION is inert: nothing sets it, and the default reproduces
+    # today's behaviour exactly. It is here so that pulling a published image
+    # instead of building one is a zero-line change.
+    image: libvox-sync:${LIBVOX_VERSION:-dev}
+    # Context is the repository root, not this directory: this module imports
+    # /libvox-driver-koha and a build context cannot reach outside itself.
+    # The root .dockerignore keeps that context to the two directories needed.
+    build:
+      context: ..
+      dockerfile: libvox-sync/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [default, libvox_internal]
+    environment:
+      # `postgres` resolves on libvox_internal, where /libvox-db publishes it.
+      # Data access runs as the unprivileged role; only `migrate` uses admin.
+      LIBVOX_DB_DSN: postgresql://libvox_app:libvox_app@postgres:5432/libvox_index
+      # Written by /libvox-portal and read here. Same server, different
+      # database -- one writer per database is the rule, not one per server.
+      LIBVOX_TENANT_DB_DSN: ${LIBVOX_TENANT_DB_DSN_DOCKER:-postgresql://libvox_app:libvox_app@postgres:5432/libvox_tenant}
+      LIBVOX_DB_ADMIN_DSN: postgresql://libvox:libvox@postgres:5432/libvox_index
+      # Decrypts the ILS credentials the portal stored, so `full --tenant` and
+      # `extract --tenant` need it and nothing else does. Passed through rather
+      # than required, unlike the portal's, because `migrate` and the fixture
+      # path work perfectly well without one -- and a command that refuses to
+      # start over a key it will never use is a bad trade. When it IS needed and
+      # absent, the CLI says so and says how to generate one.
+      #
+      # It must be byte-identical to the portal's: credentials stored under one
+      # key cannot be read back with another.
+      LIBVOX_CRYPTO_KEY: ${LIBVOX_CRYPTO_KEY:-}
+      # The embedding service, for the vector half of the search index.
+      # Unset means the index is built without vectors and every search is
+      # answered by the lexical arm alone -- which is what this did before.
+      # Defaults to the chat gateway, which is the same service in every
+      # deployment so far -- one credential, configured once. Both halves are
+      # still overridable, because "the same" is a fact about today.
+      LIBVOX_EMBEDDING_BASE_URL: ${LIBVOX_EMBEDDING_BASE_URL:-${LIBVOX_LLM_BASE_URL:-}}
+      LIBVOX_EMBEDDING_MODEL: ${LIBVOX_EMBEDDING_MODEL:-}
+      LIBVOX_EMBEDDING_API_KEY: ${LIBVOX_EMBEDDING_API_KEY:-${LIBVOX_LLM_API_KEY:-}}
+      LIBVOX_LOG_LEVEL: INFO
+      # ILS credentials belong here in standalone mode — never in the command
+      # line, where /proc/<pid>/cmdline exposes them to any local process.
+      # KOHA_URL: http://host.docker.internal:8081
+      # KOHA_CLIENT_ID: ""
+      # KOHA_CLIENT_SECRET: ""
+    # One-shot by design: every subcommand here finishes. The one that does
+    # not is `worker`, which has its own service below.
+    entrypoint: ["python", "-m", "libvox_sync"]
+    command: ["--help"]
+
+  # The only long-running thing this module has: it answers the import requests
+  # librarians raise from /libvox-portal, through the outbox that module
+  # writes. Not started by `up` unless asked for --
+  #
+  #     docker compose up -d worker
+  #
+  # because a worker that imports catalogues is not something to start by
+  # accident while running `migrate`.
+  worker:
+    profiles: ["worker"]
+    # The same image as `sync`, deliberately. See the comment there.
+    image: libvox-sync:${LIBVOX_VERSION:-dev}
+    build:
+      context: ..
+      dockerfile: libvox-sync/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [default, libvox_internal]
+    environment:
+      LIBVOX_DB_DSN: postgresql://libvox_app:libvox_app@postgres:5432/libvox_index
+      LIBVOX_TENANT_DB_DSN: ${LIBVOX_TENANT_DB_DSN_DOCKER:-postgresql://libvox_app:libvox_app@postgres:5432/libvox_tenant}
+      # Passed through, not required with `:?`. Compose interpolates the whole
+      # file, so a required variable here would break `compose run --rm sync
+      # migrate` for someone who has no key and needs none -- the trade the
+      # comment on the sync service above refuses to make.
+      #
+      # The worker refuses to start without one instead, in its own process and
+      # with its own message. See serve().
+      LIBVOX_CRYPTO_KEY: ${LIBVOX_CRYPTO_KEY:-}
+      # The embedding service, for the vector half of the search index.
+      # Unset means the index is built without vectors and every search is
+      # answered by the lexical arm alone -- which is what this did before.
+      # Defaults to the chat gateway, which is the same service in every
+      # deployment so far -- one credential, configured once. Both halves are
+      # still overridable, because "the same" is a fact about today.
+      LIBVOX_EMBEDDING_BASE_URL: ${LIBVOX_EMBEDDING_BASE_URL:-${LIBVOX_LLM_BASE_URL:-}}
+      LIBVOX_EMBEDDING_MODEL: ${LIBVOX_EMBEDDING_MODEL:-}
+      LIBVOX_EMBEDDING_API_KEY: ${LIBVOX_EMBEDDING_API_KEY:-${LIBVOX_LLM_API_KEY:-}}
+      LIBVOX_LOG_LEVEL: INFO
+    restart: unless-stopped
+    entrypoint: ["python", "-m", "libvox_sync"]
+    command: ["worker"]
+
+# Declared with the same name in every compose file that uses it; whichever
+# comes up first creates it, and none depends on another having run. This is
+# how `postgres` resolves here while the server itself lives in /libvox-db.
+networks:
+  libvox_internal:
+    name: libvox_internal
+    external: true
+

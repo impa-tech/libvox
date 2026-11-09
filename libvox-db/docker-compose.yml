@@ -1,0 +1,99 @@
+# The one PostgreSQL server, for every module that needs one.
+#
+#   ./db.sh                 bring it up and list what is in it
+#   ./db.sh psql libvox_tenant
+#
+# **Why a module of its own.** There were two servers: /libvox-portal owned one
+# and /libvox-sync the other, for no reason anybody defended -- the modules were
+# built in different orders. The rule the architecture actually protects is
+# **one writer per database**, which is a statement about databases and not
+# about servers; /libvox-portal's own initdb said so in a comment before this
+# directory existed.
+#
+# It is not inside either of those modules because a shared server owned by one
+# of them makes the other's data collateral: `docker compose down -v` in
+# /libvox-portal would have taken the Discovery Index with it. Infrastructure
+# two modules depend on belongs to neither.
+#
+# Host port 5435, and deliberately not 5432: a local PostgreSQL likes the
+# default, and both compose files this replaces said so. Not 5433 or 5434
+# either -- those were the servers that went away, and a DSN nobody updated
+# should fail to connect rather than quietly reach a container still running
+# from last week.
+
+# The project name, and therefore half of every container's name: compose builds
+# them as `<project>-<service>-<index>` and derives the project from whichever
+# directory this file happens to sit in. That is the same objection the `image:`
+# line below answers -- a derived name is an accident of the checkout, and
+# `docker exec libvox-db-... ` in a README stops working for anyone who cloned into a
+# folder named differently.
+#
+# Pinned to what it already derives here, so nothing on an existing host is
+# renamed. What changes is that it stays true somewhere else.
+name: libvox-db
+
+services:
+  postgres:
+    # pgvector's own image rather than the stock one: the extension is a C
+    # module and cannot be installed from SQL alone, and `discovery_biblio`
+    # carries an embedding column now.
+    #
+    # **Debian, where this used to be Alpine, and that is not cosmetic.** musl
+    # and glibc order text differently, so a data directory written under one
+    # and served by the other has btree indexes on text that silently disagree
+    # with the collation reading them. A volume created before this line
+    # changed needs `REINDEX DATABASE` on each of the six databases, once. A
+    # volume created after it is correct by construction, which is why the
+    # local one was discarded rather than migrated.
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: libvox
+      POSTGRES_PASSWORD: libvox
+      # Deliberately the built-in `postgres` rather than one of ours. Six
+      # databases live here and none of them should be the default by accident
+      # of being the one POSTGRES_DB happened to name.
+      POSTGRES_DB: postgres
+    # Two servers gave 100 connections each. One server gives 100 in total, and
+    # the portal's test suite found the difference within an hour of the merge:
+    # "remaining connection slots are reserved for roles with the SUPERUSER
+    # attribute", with the panel, Core, the worker and the suite all connected
+    # at once. Each connection costs a few MB of shared memory, which is the
+    # only reason not to raise it further.
+    command: ["postgres", "-c", "max_connections=200"]
+    # Loopback, and that is the security boundary -- the same rule /libvox-core
+    # states for 8091 and /libvox-mcp for 8000, which this file was missing.
+    #
+    # No deployment needs this port at all: the other modules reach the server
+    # by name over libvox_internal, and ./db.sh works through
+    # `docker compose exec`. It is published for tooling that runs on the host
+    # -- pytest against the _test databases, a psql session, the DSNs in every
+    # .env -- and none of that is on the network.
+    #
+    # Unrestricted, it put PostgreSQL on the internet the first time this ran on
+    # a public host, holding the library registry with its encrypted ILS
+    # credentials and the conversation log, behind passwords that are in this
+    # repository because they were only ever meant to be local.
+    ports:
+      - "127.0.0.1:5435:5432"
+    volumes:
+      - libvox_db:/var/lib/postgresql/data
+      # Roles first, then databases. Runs once, when the volume is empty.
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U libvox -d postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks:
+      - libvox_internal
+
+volumes:
+  libvox_db:
+
+# The network the other modules already share, so containers from different
+# compose projects resolve `postgres` by name. Declared with an explicit `name`
+# in every compose file that uses it; whichever comes up first creates it, and
+# none of them depends on another having run.
+networks:
+  libvox_internal:
+    name: libvox_internal

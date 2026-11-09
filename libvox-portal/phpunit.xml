@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="BROADCAST_CONNECTION" value="null"/>
+        <env name="CACHE_STORE" value="array"/>
+        <!-- Real PostgreSQL, never SQLite. What this module is made of - row-level
+             security, pgcrypto, CHECK constraints, triggers, SECURITY DEFINER
+             functions - does not exist under SQLite, so every isolation
+             assertion would pass without testing anything. -->
+        <env name="LIBVOX_TENANT_DB_DSN" value="postgresql://libvox_app:libvox_app@127.0.0.1:5435/libvox_tenant_test"/>
+        <env name="LIBVOX_TENANT_DB_ADMIN_DSN" value="postgresql://libvox:libvox@127.0.0.1:5435/libvox_tenant_test"/>
+        <env name="LIBVOX_CONVERSATION_DB_DSN" value="postgresql://libvox_app:libvox_app@127.0.0.1:5435/libvox_conversations_test"/>
+        <env name="LIBVOX_CONVERSATION_DB_ADMIN_DSN" value="postgresql://libvox:libvox@127.0.0.1:5435/libvox_conversations_test"/>
+        <!-- The Discovery Index's own test database, migrated by /libvox-sync's
+             runner rather than by anything here. Tests that need it skip when
+             it is not there, the same way the Tenant DB ones do. -->
+        <env name="LIBVOX_DISCOVERY_DB_DSN" value="postgresql://libvox_app:libvox_app@127.0.0.1:5435/libvox_index_test"/>
+        <env name="LIBVOX_DISCOVERY_DB_ADMIN_DSN" value="postgresql://libvox:libvox@127.0.0.1:5435/libvox_index_test"/>
+        <env name="LIBVOX_CRYPTO_KEY" value="test-key-not-a-secret"/>
+        <!-- The guard is the subject of a test rather than a precondition of one. -->
+        <env name="LIBVOX_ASSERT_UNPRIVILEGED" value="false"/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="NIGHTWATCH_ENABLED" value="false"/>
+    </php>
+</phpunit>

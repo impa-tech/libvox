@@ -1,0 +1,16 @@
+# /libvox-sync — development dependencies
+#
+#   pip install -r requirements-dev.txt
+
+-r requirements.txt
+
+pytest>=8.0
+
+# Configured in pyproject.toml since this module was written, and until now not
+# installed -- so `ruff check` here meant borrowing another environment's
+# binary, and nobody did it by accident.
+#
+# Upper bound with the rule set stated in pyproject.toml: ruff's default
+# selection widens across releases, so an unpinned one changes what CI enforces
+# without anyone deciding to.
+ruff>=0.6,<0.17

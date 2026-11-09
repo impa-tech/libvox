@@ -1,0 +1,25 @@
+# /libvox-core — runtime dependencies
+#
+#   pip install -r requirements.txt
+
+# The MCP protocol, as a client: MARC.IA reaches the tool layer over it. This
+# is the SDK, not /libvox-mcp -- that module publishes the tools and is only a
+# test dependency here.
+mcp[cli]>=2.0,<3
+
+# The HTTP surface. FastAPI because the models crossing the wire are the same
+# pydantic models /libvox-mcp publishes, so a response schema is literally the
+# same object rather than a translation of it.
+fastapi>=0.115,<1
+uvicorn[standard]>=0.32,<1
+
+# Both databases: the Discovery Index for search, the Tenant DB for
+# configuration and credentials. Read-only on the second one.
+psycopg[binary]>=3.2,<4
+
+# Siblings in this repository, not published packages. The Discovery Index
+# query and the credential decryption live in /libvox-sync; the ILS integration
+# lives in /libvox-driver-koha. Importing them is what keeps one definition of
+# each.
+-e ../libvox-sync
+-e ../libvox-driver-koha

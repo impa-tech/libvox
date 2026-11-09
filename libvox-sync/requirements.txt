@@ -1,0 +1,16 @@
+# /libvox-sync — runtime dependencies
+#
+#   pip install -r requirements.txt
+
+# PostgreSQL driver. psycopg 3, not psycopg2 — the [binary] extra avoids
+# needing libpq headers at build time.
+psycopg[binary]>=3.2,<4
+
+# The Koha integration, and the contract every driver produces. A sibling
+# directory in this repository rather than a published package, so it is
+# installed from a path. It brings httpx2 with it.
+#
+# Koha knowledge used to be duplicated inside this module. Two normalizers
+# means two definitions of what a title is, and the live path and the bulk
+# path have to agree about the same book.
+-e ../libvox-driver-koha

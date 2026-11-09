@@ -1,0 +1,78 @@
+# The tool layer, in a container.
+#
+#   docker compose up -d --build
+#
+# **Why this file exists.** This was the one component running loose on the
+# host — started by hand, with its environment exported into whatever shell
+# happened to launch it. It disappeared during a Docker data-root change and
+# nothing noticed: Core logged "could not reach the tool layer" once per
+# question, MARC.IA answered every reader that she could not reach the
+# catalogue, and no container was missing because it had never been one.
+#
+# **It talks to Core over `libvox_internal`, not through the host.** Core
+# publishes its internal API to 127.0.0.1 on purpose — that surface takes
+# tenant_id from the request body, so anything that reaches it can read any
+# library's data. A container cannot reach a host's loopback anyway, so the
+# choice was never "host or network": it was "put the two on a network, or
+# publish 8091 wider". The second is the one Core's compose refuses in a
+# comment, and it would be a real regression.
+
+# The project name, and therefore half of every container's name: compose builds
+# them as `<project>-<service>-<index>` and derives the project from whichever
+# directory this file happens to sit in. That is the same objection the `image:`
+# line below answers -- a derived name is an accident of the checkout, and
+# `docker exec libvox-mcp-... ` in a README stops working for anyone who cloned into a
+# folder named differently.
+#
+# Pinned to what it already derives here, so nothing on an existing host is
+# renamed. What changes is that it stays true somewhere else.
+name: libvox-mcp
+
+services:
+  mcp:
+    # Named, rather than left to compose's default of <project>-<service>. A
+    # derived name is an accident of the directory this file sits in; a chosen
+    # one is the artifact, and is what a registry tag or a pinned version would
+    # address. /libvox-sync had two services deriving two names from one
+    # Dockerfile, and they drifted -- see the comment there.
+    #
+    # LIBVOX_VERSION is inert: nothing sets it, and the default reproduces
+    # today's behaviour exactly.
+    image: libvox-mcp:${LIBVOX_VERSION:-dev}
+    build:
+      context: .
+    # `default` publishes the port a reader's Core reaches; `libvox_internal`
+    # is how this reaches Core. Declared external because /libvox-core creates
+    # it -- see the `networks:` block below.
+    networks: [default, libvox_internal]
+    ports:
+      # Published so `./core.sh drive` and an MCP client on the host can still
+      # reach it. Loopback only: this port terminates a bearer token, and it
+      # has no business being on the LAN.
+      - "127.0.0.1:8000:8000"
+    environment:
+      LIBVOX_MCP_BACKEND: core
+
+      # `core` is the service name on libvox_internal, and 8091 is the internal
+      # port. Not host.docker.internal: that resolves to the docker0 gateway,
+      # and Core's internal API is bound to the host's loopback, which no
+      # container can reach.
+      LIBVOX_CORE_URL: http://core:8091
+
+      # Must be byte-identical to /libvox-core's LIBVOX_CORE_SERVICE_TOKEN.
+      # Different names on the two sides because they mean different things:
+      # Core's is the token it demands, this one is the token this presents.
+      # A mismatch is not a startup failure -- it is a 401 on every tool call,
+      # which reads to a reader as the catalogue being down.
+      LIBVOX_MCP_SERVICE_TOKEN: ${LIBVOX_MCP_SERVICE_TOKEN:?set it in .env, identical to /libvox-core’s LIBVOX_CORE_SERVICE_TOKEN}
+
+      LIBVOX_LOG_LEVEL: ${LIBVOX_LOG_LEVEL:-INFO}
+
+    # It answers Core, and Core is restarted often. Coming back on its own is
+    # the whole point of moving it in here.
+    restart: unless-stopped
+
+networks:
+  libvox_internal:
+    name: libvox_internal
+    external: true

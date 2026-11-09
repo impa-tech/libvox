@@ -1,0 +1,29 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Biblioteca — Catálogo</title>
+<style>
+  body{font-family:Georgia,serif;margin:0;background:#faf8f5;color:#2b2b2b}
+  header{background:#3b3b3b;color:#fff;padding:14px 28px;font-size:15px}
+  .wrap{max-width:760px;margin:36px auto;padding:0 24px}
+  h1{font-size:26px;margin:0 0 6px}
+  p{line-height:1.7;color:#555}
+  .fake{border:1px dashed #cfc7bb;padding:14px 16px;margin-top:26px;font-size:13px;color:#8a8172}
+</style>
+<header>Koha &nbsp;·&nbsp; Catálogo em linha</header>
+<div class="wrap">
+  <h1>Catálogo</h1>
+  <p>
+    Esta página existe só para provar uma coisa: o widget entra num OPAC que
+    ninguém escreveu para ele, com uma linha de HTML, sem passo de build, e sem
+    que o CSS de vinte anos desta página vaze para dentro dele — ou o contrário.
+  </p>
+  <p>
+    O botão está no canto inferior direito. A chave da biblioteca é pública; a
+    credencial de sessão fica no servidor e nunca chega a este navegador.
+  </p>
+  <div class="fake">Esta caixa tem estilo próprio, e o widget o ignora.</div>
+</div>
+
+<!-- The one line a library pastes. In production the panel generates it. -->
+
+<script src="__WIDGET_URL__" data-key="__KEY__" data-name="__NAME__" data-color="__COLOR__"></script>

@@ -1,0 +1,18 @@
+# Never in an image: it holds LIBVOX_CRYPTO_KEY and the database password.
+.env
+.env.*
+
+# Installed inside, from composer.lock, so the layer cache works.
+/vendor
+/node_modules
+# Built by the assets stage, never copied from a laptop: a stale bundle that
+# looks like a working one is the failure this Dockerfile is arranged to avoid.
+/public/build
+
+/storage/logs/*
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/.git
+/tests
+/.phpunit.cache

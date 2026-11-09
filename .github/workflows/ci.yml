@@ -1,0 +1,124 @@
+# Lint and test every Python module in its own conda environment.
+#
+# Conda rather than plain pip on purpose: `environment.yml` is how contributors
+# actually set up, it pins `nodefaults` to dodge Anaconda's 429s, and a broken
+# environment file is a real failure mode this project has already hit. CI that
+# skipped it would be testing something nobody runs.
+
+name: CI
+
+# No `paths-ignore` on pull_request, deliberately. A skipped path filter produces
+# no check run at all, so the moment this job becomes a required check a
+# docs-only PR can never satisfy it and cannot merge. Running the matrix on a
+# markdown change costs a few minutes; a PR that cannot merge costs an argument.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  module:
+    name: ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # /libvox-portal is PHP and wants a job of its own rather than a leg of
+        # this matrix. /libvox-db has no Python, no environment.yml and no test
+        # runner — its SQL is exercised through /libvox-sync's suite.
+        #
+        # /libvox-core runs its 110 database-free tests here and skips the 106
+        # that need a server. Covering those too would mean standing up three
+        # databases *and* running /libvox-portal's Pest suite, since the portal
+        # owns libvox_tenant's schema. Worth doing later; not worth blocking the
+        # 110 on.
+        module: [libvox-mcp, libvox-sync, libvox-driver-koha, libvox-core]
+
+    defaults:
+      run:
+        shell: bash -el {0}   # login shell, so `conda activate` works
+
+    # Runs for every matrix leg; only /libvox-sync uses it. Port 5435 and the
+    # image both match /libvox-db, which is where the server moved to: the
+    # module was written when each module carried its own database, and the
+    # consolidation took the port, the databases and the image with it.
+    #
+    # pgvector rather than stock postgres, because migration 008 creates the
+    # `vector` extension and the suite applies migrations. On the stock image
+    # that migration raises its own message naming this exact cause.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: libvox
+          POSTGRES_PASSWORD: libvox
+          POSTGRES_DB: libvox
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U libvox -d libvox"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # `environment.yml` contains `pip: -r requirements-dev.txt`, a path relative
+      # to the file itself. Conda resolves it against the file's directory, so
+      # passing a module-prefixed path from the workspace root is fine — but that
+      # is the one thing here never executed against a real runner. If the first
+      # run fails with "Could not open requirements file", this is why.
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: ${{ matrix.module }}
+          environment-file: ${{ matrix.module }}/environment.yml
+          auto-activate-base: false
+
+      - name: Install the module
+        working-directory: ${{ matrix.module }}
+        run: pip install -e ".[dev]"
+
+      # /libvox-mcp's direct-Koha experiment imports the driver, so its test
+      # suite does not collect without the sibling. Goes away with the
+      # experiment; see libvox-mcp/README.md.
+      - name: Install sibling driver
+        if: matrix.module == 'libvox-mcp'
+        run: pip install -e ./libvox-driver-koha
+
+      - name: Lint
+        working-directory: ${{ matrix.module }}
+        run: ruff check .
+
+      # A service container never runs docker-entrypoint-initdb.d, so both
+      # scripts have to be applied by hand. Without the roles the RLS tests skip
+      # and the isolation guarantee goes unverified while CI stays green — which
+      # is worse than a red build. Without the databases the suite has nothing
+      # to connect to at all: the `_test` copies it truncates are created there,
+      # and the rule in its conftest is that a test which truncates talks to a
+      # `_test` database or refuses to run.
+      #
+      # Both live in /libvox-db now. They were in libvox-sync/docker/ when this
+      # step was written, and that directory no longer exists.
+      - name: Create the roles and the databases
+        if: matrix.module == 'libvox-sync'
+        env:
+          PGPASSWORD: libvox
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5435 -U libvox -d libvox \
+            -f libvox-db/initdb/01-roles.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5435 -U libvox -d libvox \
+            -f libvox-db/initdb/02-databases.sql
+
+      - name: Test
+        working-directory: ${{ matrix.module }}
+        run: pytest -q

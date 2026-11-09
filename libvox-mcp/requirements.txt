@@ -1,0 +1,18 @@
+# /libvox-mcp — runtime dependencies
+#
+#   pip install -r requirements.txt
+#
+# Pinned to major versions: the MCP SDK went 1.x -> 2.x with breaking changes
+# (MCPServer replaced FastMCP, snake_case fields, httpx2), so the upper bound
+# is load-bearing, not decoration.
+
+# The Model Context Protocol SDK. [cli] adds `mcp dev` / `mcp run`, useful in
+# development; drop the extra on a deployed server if you want a slimmer image.
+mcp[cli]>=2.0,<3
+
+# Imported directly by core_client.py. The SDK depends on it too — declared
+# here because we use it, not because it would otherwise be missing.
+httpx2>=2.10,<3
+
+# Imported directly by models.py and server.py (BaseModel, Field, AnyHttpUrl).
+pydantic>=2.11,<3

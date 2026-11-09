@@ -1,0 +1,23 @@
+# Conda environment for /libvox-mcp
+#
+#   conda env create -f environment.yml
+#   conda activate libvox-mcp
+#   pip install -e ".[dev]"
+#
+# Conda supplies the interpreter, pip supplies the packages: the MCP SDK is not
+# on conda-forge. Versions live in requirements-dev.txt so there is one source
+# of truth.
+
+name: libvox-mcp
+
+channels:
+  - conda-forge
+  # Anaconda's own channels now answer 429 without client registration, so an
+  # accidental fall-through to `defaults` fails the whole solve.
+  - nodefaults
+
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - -r requirements-dev.txt

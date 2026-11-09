@@ -1,0 +1,20 @@
+/* The compiled stylesheet for both panels.
+ *
+ * `make:filament-theme` generates one of these per panel, under
+ * `filament/<panel>/theme.css`. There is one here instead, shared, because the
+ * two panels need the same classes and two files would drift -- a utility used
+ * on a librarian's screen and purged from the operator's is a bug that renders
+ * as nothing and reports nothing. Colours still differ per panel: those are
+ * custom properties Filament emits at runtime from `->colors()`, not anything
+ * compiled in here.
+ *
+ * **The @source globs are load-bearing.** Tailwind v4 has no config file; it
+ * finds class names by scanning the paths named below, and anything it does not
+ * scan is purged. This project had no build at all until now, and every utility
+ * in the transcript view was inert -- the failure looked like a design problem
+ * for weeks. A glob that misses a directory reproduces exactly that, quietly.
+ */
+@import '../../../vendor/filament/filament/resources/css/theme.css';
+
+@source '../../../app/Filament/**/*';
+@source '../../../resources/views/**/*.blade.php';

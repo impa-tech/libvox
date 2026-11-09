@@ -1,0 +1,4 @@
+# This host's own answers -- the domains it is reached by and the interface it
+# binds. `host.env.example` is the contract, the same way every module ships a
+# `.env.example` and ignores the `.env` beside it.
+host.env

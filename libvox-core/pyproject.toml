@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "libvox-core"
+version = "0.1.0"
+description = "The Agent, Gateway and Router for LibVox — tenant boundary and tool implementation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "AGPL-3.0-or-later"
+
+# The copyright holder, which PEP 621 gives no field of its own. IMPA Tech holds
+# it, together with the LibVox team; the second entry is the technical contact.
+# Worth stating in the metadata rather than only in prose: the commercial
+# exception to the licence above is IMPA Tech's to grant, and nobody else's.
+authors = [
+    { name = "IMPA Tech" },
+    { name = "Anselmo Luiz Éden Battisti", email = "anselmo.battisti@impatech.edu.br" },
+]
+
+# Keep in sync with requirements.txt.
+#
+# The two siblings are local directories in this repository, not published
+# packages, so they go in editable first:
+#
+#     pip install -e ../libvox-driver-koha -e ../libvox-sync
+#
+# Why import them rather than reimplement: the Discovery Index query and the
+# credential decryption already exist and are tested, and a second definition of
+# either is how the index and the live answer start disagreeing about the same
+# book. See the README on where those two belong long-term.
+dependencies = [
+    "fastapi>=0.115,<1",
+    # The MCP *SDK*, not /libvox-mcp. The agent is a client of the tool layer,
+    # so it needs the protocol at runtime; the module that publishes the tools
+    # stays a test dependency. Confusing the two is how the container shipped
+    # without a package the agent imports on its first tool call.
+    "mcp[cli]>=2.0,<3",
+    "uvicorn[standard]>=0.32,<1",
+    "psycopg[binary]>=3.2,<4",
+    "libvox-sync>=0.1",
+    "libvox-driver-koha>=0.1",
+]
+
+[project.optional-dependencies]
+# libvox-mcp -- the module -- is a *test* dependency and deliberately not a
+# runtime one: the drift test compares this module's wire contract to the
+# models it publishes, and skips when it is absent. Depending on the protocol
+# adapter at runtime would invert the architecture. The MCP SDK above is a
+# different thing: the agent speaks the protocol as a client.
+dev = ["pytest>=8.0", "pytest-asyncio>=1.0", "httpx2>=2.10,<3", "ruff>=0.6,<0.17"]
+
+[project.scripts]
+libvox-core = "libvox_core.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/libvox_core"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The agent's loop is async, and so is the MCP client it drives. Same setting
+# /libvox-mcp uses, for the same reason.
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+# The rule set is stated rather than inherited. Ruff's default selection has
+# widened across releases, so an unpinned `ruff` silently changes what CI
+# enforces — new findings appear in code nobody touched. Widening this list is
+# a deliberate change with its own PR.
+#
+# Not hypothetical here. Under ruff 0.16.6's default this module reported four
+# findings in `tests/test_config.py`, a file nobody had edited; under the list
+# below it is clean. The other three modules were given this block before
+# /libvox-core existed, which is the only reason it was missing.
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

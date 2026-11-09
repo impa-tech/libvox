@@ -1,0 +1,21 @@
+# /libvox-core — development dependencies
+#
+#   pip install -r requirements-dev.txt
+#
+# Includes the runtime set.
+
+-r requirements.txt
+
+pytest>=8.0
+
+# The test client FastAPI's TestClient needs, and the same HTTP library the
+# rest of the project uses.
+httpx2>=2.10,<3
+
+# Declared, and actually installed. The two older Python modules configure ruff
+# in pyproject.toml without depending on it, so `ruff check` there needs a
+# linter borrowed from another environment.
+#
+# Upper bound with the rule set stated in pyproject.toml, for the reason given
+# there: ruff's default selection widens across releases.
+ruff>=0.6,<0.17
