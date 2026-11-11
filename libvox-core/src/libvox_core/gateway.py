@@ -36,7 +36,8 @@ from .agent.service import Inbound, respond
 from .config import Settings
 from .resume import MAX_TOKEN_CHARS, ResumeStore
 from .sessions import SessionStore
-from .tenants import resolve_channel, widget_config
+from .links import Builder, record_links, remember, remember_records
+from .tenants import opac_links, resolve_channel, widget_config
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,9 @@ def register_gateway(
                 await websocket.close(code=REFUSED)
                 return
             widget = widget_config(conn, tenant_id)
+            # Read fresh at connect, like the widget settings: a librarian who
+            # fills in the OPAC address sees links from the next page on.
+            link = opac_links(conn, tenant_id)
 
         # Minted after the binding is proven, held here, and never sent. The
         # gateway cannot call /internal/v1/sessions for this -- that route is
@@ -151,6 +155,12 @@ def register_gateway(
         # id itself.
         slip: str | None = None
 
+        # biblio_id -> title for every record this socket's searches returned,
+        # so a later answer that only checked availability can still link the
+        # book it names. Titles and ids the reader's answers were already made
+        # from; nothing here goes to the browser except as a link.
+        seen: dict[int, str] = {}
+
         try:
             while True:
                 frame = await websocket.receive_json()
@@ -161,7 +171,13 @@ def register_gateway(
                 if presented is not None:
                     if conversation_id is None and answers == 0:
                         conversation_id, answers, history = _resumed(
-                            settings, resumes, presented, tenant_id, origin
+                            settings,
+                            resumes,
+                            presented,
+                            tenant_id,
+                            origin,
+                            link,
+                            seen,
                         )
                         if conversation_id is not None:
                             slip = presented
@@ -255,6 +271,10 @@ def register_gateway(
                 }
                 if pages := _pages(answer.tool_calls):
                     generated["pages"] = pages
+                if link is not None:
+                    remember(seen, answer.tool_calls)
+                    if links := record_links(answer.text, seen, link):
+                        generated["links"] = links
                 if opened and conversation_id is not None:
                     slip = resumes.issue(tenant_id, origin, conversation_id)
                     generated["resume"] = slip
@@ -293,8 +313,14 @@ def _resumed(
     token: str,
     tenant_id: str,
     origin: str | None,
-) -> tuple[uuid.UUID | None, int, list[dict[str, str]]]:
+    link: Builder | None = None,
+    seen: dict[int, str] | None = None,
+) -> tuple[uuid.UUID | None, int, list[dict[str, Any]]]:
     """`(conversation, answers so far, what the reader was shown)`.
+
+    With a link builder, the restored answers carry their links again, built
+    from the searches in the log and the library's OPAC address as it is now;
+    and `seen` is filled, so the socket links those books in later answers too.
 
     `(None, 0, [])` for every way a slip can fail -- unknown, expired, revoked,
     issued to another library or another origin, or pointing at a conversation
@@ -310,22 +336,29 @@ def _resumed(
 
     try:
         with psycopg.connect(settings.conversation_dsn) as log:
-            seen = store.transcript(log, tenant_id, conversation_id)
+            transcript = store.transcript(log, tenant_id, conversation_id)
     except psycopg.Error:
         logger.exception("could not resume a conversation for %s", tenant_id)
         return None, 0, []
 
-    if seen is None:
+    if transcript is None:
         resumes.revoke(token)
         logger.info("a resume slip for %s outlived its conversation", tenant_id)
         return None, 0, []
 
     logger.info("resumed a web conversation for %s", tenant_id)
-    history = [
-        {"who": "you" if role == "user" else "them", "text": text}
-        for role, text in seen.lines
-    ]
-    return conversation_id, seen.answers, history
+    known: dict[int, str] = {} if seen is None else seen
+    if link is not None:
+        remember_records(known, transcript.records)
+
+    history: list[dict[str, Any]] = []
+    for role, text in transcript.lines:
+        line: dict[str, Any] = {"who": "you" if role == "user" else "them", "text": text}
+        if role != "user" and link is not None:
+            if links := record_links(text, known, link):
+                line["links"] = links
+        history.append(line)
+    return conversation_id, transcript.answers, history
 
 
 def _pages(tool_calls: list) -> dict[str, bool] | None:

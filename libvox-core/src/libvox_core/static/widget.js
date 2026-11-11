@@ -34,6 +34,11 @@
  * sentence. If a future event carries a catalogue record for display, it
  * arrives in ResponseGenerated as prose, because deciding what a reader is
  * told is the agent's job and not this file's.
+ *
+ * The one exception is a link: `links` pairs a bold title in the answer with
+ * the address of that record's page in the library's own OPAC. The server
+ * builds it -- the model never writes a URL -- and this file only puts an
+ * <a> around text it was already showing, and only for http(s).
  */
 (function () {
   'use strict';
@@ -113,6 +118,9 @@
     'line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}',
     '.msg strong{font-weight:600}',
     '.msg em{font-style:italic}',
+    '.msg a{color:inherit;text-decoration:underline;text-underline-offset:2px}',
+    '.msg a:hover{text-decoration-thickness:2px}',
+    '.msg a:focus-visible{outline:2px solid var(--accent,#4f46e5);outline-offset:1px;border-radius:2px}',
     '.msg.them{background:#f2f2f5;border-bottom-left-radius:4px;align-self:flex-start}',
     '.msg.you{background:var(--accent,#4f46e5);color:#fff;align-self:flex-end;',
     'border-bottom-right-radius:4px}',
@@ -239,6 +247,40 @@
     }
 
     return fragment;
+  }
+
+  /* ------------------------------------------------------------- the links */
+
+  var SAFE_HREF = /^https?:\/\//i;
+
+  /**
+   * Put an <a> inside each <strong> whose text the server paired with a record.
+   *
+   * Matched on the exact text, because that is what the server captured from
+   * the same `**...**` this file turned into the <strong>. The href is checked
+   * again here, though the server and the database each already did: it is
+   * the one value in this file that a browser will act on, and `javascript:`
+   * is a URL. Same tab, on purpose -- the conversation resumes on the record's
+   * page, so following a link no longer costs the reader anything.
+   */
+  function linkTitles(line, links) {
+    var byText = {};
+    links.forEach(function (link) {
+      if (link && typeof link.text === 'string' && typeof link.href === 'string' &&
+          SAFE_HREF.test(link.href)) {
+        byText[link.text] = link.href;
+      }
+    });
+
+    var strongs = line.querySelectorAll('strong');
+    for (var i = 0; i < strongs.length; i++) {
+      var strong = strongs[i];
+      if (!Object.prototype.hasOwnProperty.call(byText, strong.textContent)) continue;
+      var anchor = document.createElement('a');
+      anchor.href = byText[strong.textContent];
+      while (strong.firstChild) anchor.appendChild(strong.firstChild);
+      strong.appendChild(anchor);
+    }
   }
 
   /* ------------------------------------------------------------ the thumb */
@@ -373,7 +415,7 @@
     }
 
     var api = {
-      say: function (text, who) {
+      say: function (text, who, links) {
         var line = document.createElement('div');
         line.className = 'msg ' + (who || 'them');
 
@@ -382,6 +424,7 @@
         // reason not to.
         if ((who || 'them') === 'them') {
           line.appendChild(withEmphasis(dedent(text)));
+          if (links && links.length) linkTitles(line, links);
         } else {
           line.textContent = text;
         }
@@ -490,13 +533,15 @@
         };
       },
       /**
-       * What the reader saw on the previous page, drawn back. No thumbs and
-       * no "Próximos ›" under these: a rating already given is not shown
-       * here, and "next" would page whatever the model searched last.
+       * What the reader saw on the previous page, drawn back -- links
+       * included, which the server rebuilds from the log. No thumbs and no
+       * "Próximos ›" under these: a rating already given is not shown here,
+       * and "next" would page whatever the model searched last.
        */
       history: function (lines) {
         lines.forEach(function (line) {
-          api.say(line.text, line.who === 'you' ? 'you' : 'them');
+          var who = line.who === 'you' ? 'you' : 'them';
+          api.say(line.text, who, who === 'them' ? line.links : null);
         });
       },
       /** Empty the log for a new conversation; the composer stays. */
@@ -655,7 +700,7 @@
         ui.status(ui.words[frame.tool] || ui.words.thinking);
       } else if (frame.type === 'ResponseGenerated') {
         ui.status('');
-        ui.say(frame.text);
+        ui.say(frame.text, 'them', frame.links);
         ui.pages(frame.pages);
         ui.enable(true);
         // Only the answer that opened the conversation carries one.

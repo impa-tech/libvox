@@ -202,6 +202,12 @@ class Transcript:
     """Every spoken answer in the conversation, not only those in `lines` --
     the ordinal a rating names keeps counting from here."""
 
+    records: tuple[tuple[int, str], ...] = ()
+    """`(biblio_id, title)` from every search the conversation ran, oldest
+    first. Not shown to anyone: it is what lets the next page link the books
+    the restored answers name, built afresh from the library's *current* OPAC
+    address rather than a URL frozen into the log."""
+
 
 def transcript(
     conn: psycopg.Connection,
@@ -252,7 +258,41 @@ def transcript(
         )
         lines = tuple((role, content or "") for role, content in cur.fetchall())
 
-    return Transcript(lines=lines, answers=answers)
+        cur.execute(
+            "SELECT content FROM messages "
+            " WHERE conversation_id = %s AND role = 'tool' "
+            "   AND tool_name = 'search_catalog' ORDER BY message_id",
+            (conversation_id,),
+        )
+        records = tuple(
+            record for (content,) in cur.fetchall() for record in _titles(content)
+        )
+
+    return Transcript(lines=lines, answers=answers, records=records)
+
+
+def _titles(content: str | None) -> list[tuple[int, str]]:
+    """`(biblio_id, title)` out of one stored search result, or nothing.
+
+    Forgiving on purpose: a failed call stored its error rather than a result,
+    and a row that is not the shape this expects costs a link, not a resume.
+    """
+    try:
+        result = json.loads(content or "")
+    except ValueError:
+        return []
+    if not isinstance(result, dict):
+        return []
+    found = []
+    for record in result.get("records") or []:
+        if not isinstance(record, dict):
+            continue
+        biblio_id, title = record.get("biblio_id"), record.get("title")
+        if isinstance(biblio_id, int) and not isinstance(biblio_id, bool) and (
+            isinstance(title, str) and title.strip()
+        ):
+            found.append((biblio_id, title))
+    return found
 
 
 def load(

@@ -905,9 +905,9 @@ wraps the handshake" means once you try to write it.
 | ← | `SessionReadyEvent` | `assistant_name`, `welcome_message`, `theme_color`, `locale` |
 | → | `QueryReceived` | `text` |
 | ← | `ToolExecuting` | the tool's **name**, and nothing else |
-| ← | `ResponseGenerated` | `text`, and `pages` — `{"next": true}` — when the answer's search has a page after this one, and `resume` — a slip — on the answer that opened the conversation |
+| ← | `ResponseGenerated` | `text`, and `pages` — `{"next": true}` — when the answer's search has a page after this one, `resume` — a slip — on the answer that opened the conversation, and `links` — `[{"text", "href"}]` — when a book it names in bold has an OPAC page |
 | → | `ResumeConversation` | `token`, the slip; only before the socket's first question |
-| ← | `ConversationResumed` | `history` — `[{"who": "you"\|"them", "text"}]`, the last 40 lines — and `answers`, the count a rating continues from. Empty for every way a slip can fail |
+| ← | `ConversationResumed` | `history` — `[{"who": "you"\|"them", "text", "links"?}]`, the last 40 lines — and `answers`, the count a rating continues from. Empty for every way a slip can fail |
 | → | `ForgetConversation` | nothing; "Nova conversa" — revokes the slip at once |
 | ← | `ErrorEvent` | a sentence for the reader |
 
@@ -920,6 +920,29 @@ inside it must not cost an answer the library already paid a model to produce.
 
 Arguments carry the reader's own words back and a result carries the catalogue;
 a progress event needs neither.
+
+### A link to the book's page in the OPAC
+
+A book MARC.IA names in bold links to its record page in the library's OPAC —
+`https://koha-opac-demo.ibict.br/cgi-bin/koha/opac-detail.pl?biblionumber=64`
+for *Dom Casmurro*. **The model never writes the URL.** `links.py` finds the
+bold titles in the answer, matches each one against the records this socket's
+searches returned, and builds the address from the librarian's **OPAC address**
+(`tenant_ils.opac_url`, a field on the portal's catalogue connection page) and
+the record's `biblio_id`. The path is the driver's — Koha's
+`opac-detail.pl?biblionumber=` lives in `libvox_driver_koha.record_url` — so
+another ILS brings its own, and an ILS with no builder gets no links.
+
+A title that fits two records, or none, gets no link: a link to the wrong book
+is worse than a plain title. No OPAC address, no links — what every library had
+before. Only `http(s)` reaches an `href`, checked in the database, here and in
+the widget.
+
+Answers redrawn on the next page keep their links. They are **rebuilt, not
+stored**: the log already holds every search result, so the transcript reads
+the `(biblio_id, title)` pairs back and the links are built again from the
+library's OPAC address as it is *now* — a librarian who corrects the address
+fixes old conversations too, and no URL is frozen into the log.
 
 ### Changing page without losing the conversation
 

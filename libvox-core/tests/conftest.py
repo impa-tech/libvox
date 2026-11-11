@@ -212,18 +212,25 @@ def register_library(
     return key
 
 
-def store_credentials(tenant_id: str = TENANT_A, *, base_url: str = "http://koha.test") -> None:
+def store_credentials(
+    tenant_id: str = TENANT_A,
+    *,
+    base_url: str = "http://koha.test",
+    opac_url: str | None = None,
+) -> None:
     """Give a library an ILS, so availability has something to fail against."""
     with psycopg.connect(TENANT_ADMIN) as conn:
         with conn.cursor() as cur:
             cur.execute("SET ROLE libvox")
             cur.execute(
                 "INSERT INTO tenant_ils "
-                "  (tenant_id, ils_type, base_url, client_id, client_secret_enc) "
-                "VALUES (%s, 'koha', %s, 'id', "
+                "  (tenant_id, ils_type, base_url, opac_url, client_id, "
+                "   client_secret_enc) "
+                "VALUES (%s, 'koha', %s, %s, 'id', "
                 "        pgp_sym_encrypt('secret', %s, 'compress-algo=0, cipher-algo=aes256')) "
-                "ON CONFLICT (tenant_id) DO UPDATE SET base_url = EXCLUDED.base_url",
-                (tenant_id, base_url, CRYPTO_KEY),
+                "ON CONFLICT (tenant_id) DO UPDATE "
+                "SET base_url = EXCLUDED.base_url, opac_url = EXCLUDED.opac_url",
+                (tenant_id, base_url, opac_url, CRYPTO_KEY),
             )
         conn.commit()
 

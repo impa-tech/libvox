@@ -746,3 +746,109 @@ def test_no_frame_carries_the_conversation_id(wired) -> None:
     wire = json.dumps(seen)
     assert conversation_id not in wire
     assert conversation_id.replace("-", "") not in wire
+
+
+# --- links to the OPAC ------------------------------------------------------
+
+
+def _answered_about_casmurro(
+    wired, *, opac_url: str | None, then: str | None = None
+) -> list[dict]:
+    """A search that returns Dom Casmurro, answered with its title in bold."""
+    from conftest import store_credentials
+    from test_messages import FakeModel
+
+    from libvox_core.agent.llm import Completion, ToolIntent
+
+    public, box, models = wired
+    box._result = {
+        "index_status": "ready",
+        "truncated": False,
+        "records": [{"biblio_id": 64, "title": "Dom Casmurro : romance /"}],
+    }
+    completions = [
+        Completion(intents=[ToolIntent("c1", "search_catalog", {"query": "machado"})]),
+        Completion(text="Temos **Dom Casmurro**, de Machado de Assis."),
+    ]
+    if then:
+        completions.append(Completion(text=then))
+    models.append(FakeModel(*completions))
+    key = register_library(TENANT_A, origins=[ORIGIN])
+    store_credentials(TENANT_A, opac_url=opac_url)
+
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        frames = [_answer(ws, "algo do Machado?")]
+        if then:
+            frames.append(_answer(ws, "e esse, tem?"))
+    return frames
+
+
+def test_a_book_named_in_bold_links_to_its_opac_page(wired) -> None:
+    (answer,) = _answered_about_casmurro(
+        wired, opac_url="https://koha-opac-demo.ibict.br"
+    )
+
+    assert answer["links"] == [
+        {
+            "text": "Dom Casmurro",
+            "href": "https://koha-opac-demo.ibict.br/cgi-bin/koha/opac-detail.pl"
+            "?biblionumber=64",
+        }
+    ]
+
+
+def test_without_an_opac_address_there_are_no_links(wired) -> None:
+    (answer,) = _answered_about_casmurro(wired, opac_url=None)
+
+    assert "links" not in answer
+
+
+def test_a_later_answer_links_a_book_from_an_earlier_search(wired) -> None:
+    """"E esse, tem?" only checks availability; the title it names came from
+    the search the turn before, and the link still has to be there."""
+    _, later = _answered_about_casmurro(
+        wired,
+        opac_url="http://localhost:8080/",
+        then="Sim, **Dom Casmurro** está na estante.",
+    )
+
+    assert later["links"] == [
+        {
+            "text": "Dom Casmurro",
+            "href": "http://localhost:8080/cgi-bin/koha/opac-detail.pl?biblionumber=64",
+        }
+    ]
+
+
+def test_the_next_page_redraws_the_answer_with_its_links(wired) -> None:
+    """Rebuilt from the searches in the log, with the OPAC address as it is
+    now -- and the resumed socket links those books in later answers too."""
+    from conftest import store_credentials
+    from test_messages import FakeModel
+
+    from libvox_core.agent.llm import Completion
+
+    public, _box, models = wired
+    (first,) = _answered_about_casmurro(
+        wired, opac_url="https://koha-opac-demo.ibict.br"
+    )
+    # The librarian corrects the address between the two pages.
+    store_credentials(TENANT_A, opac_url="https://opac.ibict.br")
+    models.clear()
+    models.append(FakeModel(Completion(text="Sim, **Dom Casmurro** está lá.")))
+    key = f"wk_{TENANT_A.replace('-', '_')}_key"  # registered by the helper
+
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        history = _resume(ws, first["resume"])
+        later = _answer(ws, "e esse, tem?")
+
+    record = "/cgi-bin/koha/opac-detail.pl?biblionumber=64"
+    assert history[0] == {"who": "you", "text": "algo do Machado?"}
+    assert history[1]["links"] == [
+        {"text": "Dom Casmurro", "href": "https://opac.ibict.br" + record}
+    ]
+    assert later["links"] == [
+        {"text": "Dom Casmurro", "href": "https://opac.ibict.br" + record}
+    ]

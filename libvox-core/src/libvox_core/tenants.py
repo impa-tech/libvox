@@ -84,3 +84,32 @@ def widget_config(conn: psycopg.Connection, tenant_id: str) -> dict[str, object]
         "persona_tone": tone,
         "theme_color": colour,
     }
+
+
+def opac_links(conn: psycopg.Connection, tenant_id: str):
+    """How to link a record to this library's OPAC page, or None.
+
+    Two columns of `tenant_ils` and never the secret: which ILS, and the OPAC
+    address the librarian gave the portal. Inside a tenant scope like every
+    other read of library data. See `links.py` for what is built from them.
+
+    None when the library has not given an address, or runs an ILS no driver
+    builds links for -- and when the column is not there yet, because a portal
+    migration not yet run should cost links, not every reader's session.
+    """
+    from libvox_sync.db import tenant_scope
+
+    from .links import builder_for
+
+    try:
+        with tenant_scope(conn, tenant_id) as scoped, scoped.cursor() as cur:
+            cur.execute(
+                "SELECT ils_type, opac_url FROM tenant_ils WHERE tenant_id = %s",
+                (tenant_id,),
+            )
+            row = cur.fetchone()
+    except psycopg.errors.UndefinedColumn:
+        logger.warning("tenant_ils has no opac_url yet; run the portal migrations")
+        return None
+
+    return builder_for(*row) if row else None

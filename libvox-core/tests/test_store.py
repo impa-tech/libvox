@@ -467,3 +467,35 @@ def test_another_library_gets_no_transcript_at_all(conn) -> None:
 
     assert store.transcript(conn, TENANT_B, opened.conversation_id) is None
     assert store.transcript(conn, TENANT_A, uuid.uuid4()) is None
+
+
+def test_the_transcript_reads_back_what_the_searches_found(conn) -> None:
+    """For links on the next page: ids and titles, not shown to anyone. A
+    record without a title, and a stored error instead of a result, cost
+    nothing."""
+    opened = store.open_conversation(conn, TENANT_A)
+    store.append(conn, TENANT_A, opened.conversation_id, a_turn())
+    store.append(
+        conn,
+        TENANT_A,
+        opened.conversation_id,
+        [
+            Message("user", "algo do Machado?"),
+            Message("assistant", "", tool_name="search_catalog",
+                    tool_arguments={"query": "machado"}, tool_call_id="c2"),
+            Message("tool", json.dumps({"records": [
+                {"biblio_id": 64, "title": "Dom Casmurro"},
+                {"biblio_id": 65, "title": "Quincas Borba"},
+            ]}), tool_name="search_catalog", tool_call_id="c2"),
+            Message("assistant", "", tool_name="search_catalog",
+                    tool_arguments={"query": "x"}, tool_call_id="c3"),
+            Message("tool", "the tool failed", tool_name="search_catalog",
+                    tool_call_id="c3"),
+            Message("assistant", "Temos **Dom Casmurro**."),
+        ],
+    )
+
+    seen = store.transcript(conn, TENANT_A, opened.conversation_id)
+
+    assert seen is not None
+    assert seen.records == ((64, "Dom Casmurro"), (65, "Quincas Borba"))
