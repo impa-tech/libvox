@@ -122,6 +122,8 @@ return [
 
         'ils_type' => 'System',
         'base_url' => 'Address',
+        'opac_url' => 'OPAC address',
+        'opac_url_help' => 'The address readers open, for example https://opac.library.org. With it, every book MARC.IA names links to its record page. Optional.',
         'client_id' => 'Client ID',
         'client_id_help' => 'An identifier, not a secret -- the equivalent of a username. Stored as typed.',
         'client_secret' => 'Client secret',

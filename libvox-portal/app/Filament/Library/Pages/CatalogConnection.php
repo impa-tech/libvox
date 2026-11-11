@@ -63,6 +63,7 @@ class CatalogConnection extends Page implements HasForms
             'ils_type' => $summary?->connection->ilsType->value ?? IlsType::Koha->value,
             'base_url' => $summary?->connection->baseUrl,
             'client_id' => $summary?->connection->clientId,
+            'opac_url' => $summary?->connection->opacUrl,
         ]);
     }
 
@@ -84,6 +85,15 @@ class CatalogConnection extends Page implements HasForms
                             ->label(__('portal.ils.base_url'))
                             ->url()
                             ->required()
+                            ->maxLength(255),
+
+                        // Optional: without it MARC.IA names a book and links
+                        // nowhere, which is what she did before it existed.
+                        TextInput::make('opac_url')
+                            ->label(__('portal.ils.opac_url'))
+                            ->helperText(__('portal.ils.opac_url_help'))
+                            ->url()
+                            ->rule('regex:/^https?:\/\//i')
                             ->maxLength(255),
                     ]),
 
@@ -124,6 +134,7 @@ class CatalogConnection extends Page implements HasForms
             ilsType: IlsType::from($state['ils_type']),
             baseUrl: $state['base_url'],
             clientId: $state['client_id'],
+            opacUrl: $state['opac_url'] ?? null,
         );
 
         try {

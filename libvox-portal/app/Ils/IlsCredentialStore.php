@@ -47,12 +47,13 @@ class IlsCredentialStore
 
         $sql = <<<SQL
             INSERT INTO tenant_ils
-                   (tenant_id, ils_type, base_url, client_id, client_secret_enc)
-            VALUES (?, ?, ?, ?, {$expression})
+                   (tenant_id, ils_type, base_url, client_id, opac_url, client_secret_enc)
+            VALUES (?, ?, ?, ?, ?, {$expression})
             ON CONFLICT (tenant_id) DO UPDATE
                SET ils_type          = EXCLUDED.ils_type,
                    base_url          = EXCLUDED.base_url,
                    client_id         = EXCLUDED.client_id,
+                   opac_url          = EXCLUDED.opac_url,
                    client_secret_enc = EXCLUDED.client_secret_enc,
                    updated_at        = now()
             SQL;
@@ -64,6 +65,7 @@ class IlsCredentialStore
                     $connection->ilsType->value,
                     $connection->baseUrl,
                     $connection->clientId,
+                    self::blankIsNull($connection->opacUrl),
                     ...$cryptoBindings,
                 ]);
 
@@ -112,6 +114,7 @@ class IlsCredentialStore
                SET ils_type   = ?,
                    base_url   = ?,
                    client_id  = ?,
+                   opac_url   = ?,
                    updated_at = now()
              WHERE tenant_id = ?
             SQL;
@@ -120,6 +123,7 @@ class IlsCredentialStore
             $connection->ilsType->value,
             $connection->baseUrl,
             $connection->clientId,
+            self::blankIsNull($connection->opacUrl),
             $connection->tenantId,
         ]));
 
@@ -139,7 +143,7 @@ class IlsCredentialStore
     public function describe(string $tenantId): ?IlsConnectionSummary
     {
         $row = $this->scope->run($tenantId, fn () => $this->connection->selectOne(
-            'SELECT ils_type, base_url, client_id, updated_at FROM tenant_ils WHERE tenant_id = ?',
+            'SELECT ils_type, base_url, client_id, opac_url, updated_at FROM tenant_ils WHERE tenant_id = ?',
             [$tenantId],
         ));
 
@@ -153,9 +157,18 @@ class IlsCredentialStore
                 ilsType: IlsType::from($row->ils_type),
                 baseUrl: $row->base_url,
                 clientId: $row->client_id,
+                opacUrl: $row->opac_url,
             ),
             secretUpdatedAt: $row->updated_at,
         );
+    }
+
+    /** An empty field means "no OPAC address", not an address that is empty. */
+    private static function blankIsNull(?string $value): ?string
+    {
+        $value = $value === null ? null : trim($value);
+
+        return $value === '' ? null : $value;
     }
 
     public function forget(string $tenantId): void

@@ -5,6 +5,7 @@ use App\Ils\CredentialStorageFailed;
 use App\Ils\IlsConnection;
 use App\Ils\IlsCredentialStore;
 use App\Models\Tenant;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -216,4 +217,49 @@ test('updating a connection that was never configured is refused', function () {
     // back to an insert.
     expect(fn () => store()->updateConnection(connection()))
         ->toThrow(CredentialStorageFailed::class);
+});
+
+test('the OPAC address is kept with the connection and read back', function () {
+    $withOpac = new IlsConnection(
+        tenantId: 'lib-furg',
+        ilsType: IlsType::Koha,
+        baseUrl: 'http://127.0.0.1:8081',
+        clientId: 'a-client-id',
+        opacUrl: 'https://opac.furg.br',
+    );
+    store()->put($withOpac, 'the-actual-secret');
+
+    expect(store()->describe('lib-furg')->connection->opacUrl)->toBe('https://opac.furg.br');
+
+    // Changing only the address, without retyping the secret, keeps both.
+    store()->updateConnection(new IlsConnection(
+        tenantId: 'lib-furg',
+        ilsType: IlsType::Koha,
+        baseUrl: 'http://127.0.0.1:8081',
+        clientId: 'a-client-id',
+        opacUrl: 'https://catalogo.furg.br',
+    ));
+
+    expect(store()->describe('lib-furg')->connection->opacUrl)->toBe('https://catalogo.furg.br');
+});
+
+test('an empty OPAC address is no address, not an empty one', function () {
+    store()->put(new IlsConnection(
+        tenantId: 'lib-furg',
+        ilsType: IlsType::Koha,
+        baseUrl: 'http://127.0.0.1:8081',
+        clientId: 'a-client-id',
+        opacUrl: '  ',
+    ), 'the-actual-secret');
+
+    expect(store()->describe('lib-furg')->connection->opacUrl)->toBeNull();
+});
+
+test('the database refuses an OPAC address that is not http or https', function () {
+    // It ends up in an href in a reader's browser, and javascript: is a URL.
+    store()->put(connection(), 'the-actual-secret');
+
+    expect(fn () => DB::connection('pgsql_admin')->update(
+        "UPDATE tenant_ils SET opac_url = 'javascript:alert(1)' WHERE tenant_id = 'lib-furg'"
+    ))->toThrow(QueryException::class);
 });

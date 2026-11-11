@@ -20,5 +20,9 @@ final readonly class IlsConnection
         public IlsType $ilsType,
         public string $baseUrl,
         public string $clientId,
+        // Where readers open the catalogue, for a link to one record. Not the
+        // API address above -- Koha serves the two on different hosts -- and
+        // not an allowed origin either: it decides nothing about access.
+        public ?string $opacUrl = null,
     ) {}
 }

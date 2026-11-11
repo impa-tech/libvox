@@ -113,6 +113,8 @@ return [
 
         'ils_type' => 'Sistema',
         'base_url' => 'Endereço',
+        'opac_url' => 'Endereço do OPAC',
+        'opac_url_help' => 'O endereço que os leitores abrem, por exemplo https://opac.biblioteca.br. Com ele, cada livro que a MARC.IA citar vira um link para a página do registro. Opcional.',
         'client_id' => 'Client ID',
         'client_id_help' => 'Um identificador, não um segredo -- o equivalente a um nome de usuário. Guardado como digitado.',
         'client_secret' => 'Client secret',
