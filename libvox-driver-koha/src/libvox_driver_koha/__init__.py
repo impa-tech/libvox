@@ -55,6 +55,7 @@ from .errors import (
     UpstreamError,
 )
 from .handler import handle, redacted
+from .links import record_url
 from .normalize import availability_from_items, item_state, normalize, normalize_page
 
 __version__ = "0.1.0"
@@ -87,5 +88,6 @@ __all__ = [
     "iter_records",
     "normalize",
     "normalize_page",
+    "record_url",
     "redacted",
 ]
