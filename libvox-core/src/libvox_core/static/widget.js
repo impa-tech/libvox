@@ -103,6 +103,7 @@
     '.head button{margin-left:auto;background:transparent;border:0;color:inherit;',
     'font-size:20px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:6px}',
     '.head button:focus-visible{outline:2px solid #fff;outline-offset:1px}',
+    '.head button.reset~button.close{margin-left:2px}',
     '.head button.reset{font-size:12px;font-weight:500;padding:4px 9px;',
     'border:1px solid rgba(255,255,255,.6)}',
     '.head button.reset:hover:not(:disabled){background:rgba(255,255,255,.15)}',
@@ -270,9 +271,10 @@
    *
    * Knows nothing about sockets. `onSend` is optional: without it the composer
    * is disabled, which is exactly the preview the librarian's panel wants.
-   * `onReset` is too, and draws the "Nova conversa" button only when given.
+   * `onReset` is too, and draws the "Nova conversa" button only when given;
+   * so is `onClose`, which draws the × that closes the panel.
    */
-  function render(host, config, onSend, onReset) {
+  function render(host, config, onSend, onReset, onClose) {
     config = config || {};
     var t = words(config.locale);  // reassigned by `configure`
 
@@ -308,6 +310,21 @@
         if (!reset.disabled) onReset();
       });
       head.appendChild(reset);
+    }
+
+    // Closing at the top, where a panel's close is looked for, rather than on
+    // the launcher underneath it -- which on a phone sat below the composer
+    // and read as part of the conversation.
+    var close = null;
+    if (onClose) {
+      close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'close';
+      close.textContent = '×';
+      close.setAttribute('aria-label', t.close);
+      close.title = t.close;
+      close.addEventListener('click', onClose);
+      head.appendChild(close);
     }
 
     var log = document.createElement('div');
@@ -502,6 +519,10 @@
           input.setAttribute('aria-label', t.placeholder);
           send.textContent = t.send;
           if (reset) reset.textContent = t.reset;
+          if (close) {
+            close.setAttribute('aria-label', t.close);
+            close.title = t.close;
+          }
         }
         if (next.welcome_message) api.say(next.welcome_message);
       },
@@ -748,23 +769,26 @@
     var ui = null;
     var remembered = memory(options.key);
 
-    launcher.addEventListener('click', function () {
-      if (opened) {
-        floating.removeChild(panelHost);
-        floating.appendChild(launcher);
-        launcher.textContent = launch();
-        opened = false;
-        // Closed on purpose, so the next page does not open it again. The
-        // conversation is kept: opening it later on this page or the next
-        // picks it back up.
-        remembered.set('open', null);
-        if (link) link.socket.close();
-        link = null;
-        return;
-      }
+    // The launcher only opens; the panel's own × closes it, and while the panel
+    // is up the launcher is out of the way rather than relabelled "Fechar".
+    function shut() {
+      if (!opened) return;
+      floating.replaceChild(launcher, panelHost);
+      launcher.textContent = launch();
+      opened = false;
+      // Closed on purpose, so the next page does not open it again. The
+      // conversation is kept: opening it later on this page or the next
+      // picks it back up.
+      remembered.set('open', null);
+      if (link) link.socket.close();
+      link = null;
+      launcher.focus();
+    }
 
-      floating.insertBefore(panelHost, launcher);
-      launcher.textContent = words(options.locale).close;
+    launcher.addEventListener('click', function () {
+      if (opened) return;
+
+      floating.replaceChild(panelHost, launcher);
       opened = true;
       remembered.set('open', true);
 
@@ -782,7 +806,8 @@
           ui.clear();
           if (greeting) ui.say(greeting);
           ui.focus();
-        }
+        },
+        shut
       );
       ui.enable(false);
 
@@ -805,7 +830,7 @@
     });
 
     document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && opened) launcher.click();
+      if (event.key === 'Escape' && opened) shut();
     });
 
     // Open on the last page, so open on this one -- the reader clicked a
