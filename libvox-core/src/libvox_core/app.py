@@ -167,7 +167,13 @@ def create_public_app(
 
     from .gateway import register_gateway
 
-    register_gateway(app, settings=settings, sessions=sessions)
+    # Public only: a resume slip is something a browser presents, and the
+    # internal app has no browser. In memory, like sessions -- see resume.py.
+    from .resume import ResumeStore
+
+    resumes = ResumeStore(ttl_s=settings.resume_ttl_s)
+    app.state.resumes = resumes
+    register_gateway(app, settings=settings, sessions=sessions, resumes=resumes)
 
     widget = Path(__file__).parent / "static" / "widget.js"
 

@@ -190,6 +190,71 @@ def rate(
     return message_id
 
 
+@dataclass(frozen=True, slots=True)
+class Transcript:
+    """What the reader was shown, for redrawing the panel on the next page."""
+
+    lines: tuple[tuple[str, str], ...]
+    """`(role, text)`, oldest first: `user` and the assistant's spoken answers,
+    never a tool call or a tool result."""
+
+    answers: int
+    """Every spoken answer in the conversation, not only those in `lines` --
+    the ordinal a rating names keeps counting from here."""
+
+
+def transcript(
+    conn: psycopg.Connection,
+    tenant_id: str,
+    conversation_id: uuid.UUID,
+    *,
+    limit: int = 40,
+) -> Transcript | None:
+    """The reader's side of a conversation, or None if it is not there.
+
+    None covers a conversation `prune` already deleted and one that belongs to
+    another library -- row-level security makes those the same empty result,
+    which is the right thing for them to be.
+
+    Only what the reader already saw. Tool results carry the catalogue records
+    the model read, and the reader was shown the prose made from them, so that
+    is what goes back. "Spoken" is the same test `rate()` uses -- an assistant
+    message with no `tool_name` -- so `answers` and the rating ordinal cannot
+    disagree.
+    """
+    from libvox_sync.db import tenant_scope
+
+    with tenant_scope(conn, tenant_id) as scoped, scoped.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM conversations WHERE conversation_id = %s",
+            (conversation_id,),
+        )
+        if cur.fetchone() is None:
+            return None
+
+        cur.execute(
+            "SELECT count(*) FROM messages "
+            " WHERE conversation_id = %s AND role = 'assistant' "
+            "   AND tool_name IS NULL",
+            (conversation_id,),
+        )
+        answers = cur.fetchone()[0]
+
+        # The newest `limit`, then put back in the order they were said.
+        cur.execute(
+            "SELECT role, content FROM ("
+            "  SELECT message_id, role, content FROM messages "
+            "   WHERE conversation_id = %s AND tool_name IS NULL "
+            "     AND role IN ('user', 'assistant') "
+            "   ORDER BY message_id DESC LIMIT %s"
+            ") newest ORDER BY message_id",
+            (conversation_id, limit),
+        )
+        lines = tuple((role, content or "") for role, content in cur.fetchall())
+
+    return Transcript(lines=lines, answers=answers)
+
+
 def load(
     conn: psycopg.Connection,
     tenant_id: str,

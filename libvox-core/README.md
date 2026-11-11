@@ -905,7 +905,10 @@ wraps the handshake" means once you try to write it.
 | ← | `SessionReadyEvent` | `assistant_name`, `welcome_message`, `theme_color`, `locale` |
 | → | `QueryReceived` | `text` |
 | ← | `ToolExecuting` | the tool's **name**, and nothing else |
-| ← | `ResponseGenerated` | `text`, and `pages` — `{"next": true}` — when the answer's search has a page after this one |
+| ← | `ResponseGenerated` | `text`, and `pages` — `{"next": true}` — when the answer's search has a page after this one, and `resume` — a slip — on the answer that opened the conversation |
+| → | `ResumeConversation` | `token`, the slip; only before the socket's first question |
+| ← | `ConversationResumed` | `history` — `[{"who": "you"\|"them", "text"}]`, the last 40 lines — and `answers`, the count a rating continues from. Empty for every way a slip can fail |
+| → | `ForgetConversation` | nothing; "Nova conversa" — revokes the slip at once |
 | ← | `ErrorEvent` | a sentence for the reader |
 
 `ToolExecuting` is the honest typing indicator: rather than animating dots for
@@ -917,6 +920,29 @@ inside it must not cost an answer the library already paid a model to produce.
 
 Arguments carry the reader's own words back and a result carries the catalogue;
 a progress event needs neither.
+
+### Changing page without losing the conversation
+
+On an OPAC every click reloads the page, and the socket dies with it. The
+answer that opens a conversation carries a **resume slip**; the widget keeps it
+in `sessionStorage` and presents it on the next page's socket, which gets the
+conversation back — the panel's history and the model's context both, so "is
+the second one available?" still knows which book.
+
+The slip is random and is not the conversation id, which still never leaves
+the process. It is bound to the tenant **and** the exact `Origin` of the
+handshake that earned it, and redeeming it re-checks both against a handshake
+that has already passed `resolve_channel`. It lapses after
+`LIBVOX_RESUME_TTL_S` (1800) without an answer, and "Nova conversa" revokes it
+at once. Unknown, expired, revoked, another library, another origin, or a
+conversation `prune` deleted: one empty `ConversationResumed`, and the widget
+starts afresh. `sessionStorage` rather than `localStorage` so it dies with the
+tab — at a shared terminal the next reader finds an empty widget.
+
+Slips live in memory, like sessions (below) and for the same reason, so a
+restart forgets them and the next page starts a new conversation. A table
+would survive that, and would also be a column joining a reader's page views
+together — the `session_id` the conversation log must not have.
 
 ### `Origin`, and what it does not do
 

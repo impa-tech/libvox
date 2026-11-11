@@ -422,3 +422,48 @@ def test_what_the_provider_attached_survives_a_reload(conn) -> None:
     assert call.provider_extra == signed
     # And it reaches the wire, which is the only place it does any good.
     assert restored.as_wire()[2]["tool_calls"][0]["extra_content"] == signed
+
+
+# --- what the next page redraws ---------------------------------------------
+
+
+def test_the_transcript_is_what_the_reader_saw_and_nothing_else(conn) -> None:
+    """The question and the answer. Not the tool call and not the records the
+    tool returned -- the reader was shown prose made from them."""
+    opened = store.open_conversation(conn, TENANT_A)
+    store.append(conn, TENANT_A, opened.conversation_id, a_turn())
+
+    seen = store.transcript(conn, TENANT_A, opened.conversation_id)
+
+    assert seen is not None
+    assert seen.lines == (
+        ("user", "tem algo do Dürrenmatt?"),
+        ("assistant", "Temos dois."),
+    )
+    assert seen.answers == 1
+
+
+def test_a_long_transcript_keeps_the_newest_and_counts_every_answer(conn) -> None:
+    opened = store.open_conversation(conn, TENANT_A)
+    for n in range(5):
+        store.append(
+            conn,
+            TENANT_A,
+            opened.conversation_id,
+            [Message("user", f"q{n}"), Message("assistant", f"a{n}")],
+        )
+
+    seen = store.transcript(conn, TENANT_A, opened.conversation_id, limit=3)
+
+    assert seen is not None
+    assert seen.lines == (("assistant", "a3"), ("user", "q4"), ("assistant", "a4"))
+    # Five, not the two on screen: the rating ordinal keeps counting from here.
+    assert seen.answers == 5
+
+
+def test_another_library_gets_no_transcript_at_all(conn) -> None:
+    opened = store.open_conversation(conn, TENANT_A)
+    store.append(conn, TENANT_A, opened.conversation_id, a_turn())
+
+    assert store.transcript(conn, TENANT_B, opened.conversation_id) is None
+    assert store.transcript(conn, TENANT_A, uuid.uuid4()) is None

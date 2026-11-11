@@ -218,6 +218,9 @@ def test_a_tool_call_is_announced_without_its_arguments_or_its_result(
         answer = ws.receive_json()
 
     assert announced == {"type": "ToolExecuting", "tool": "search_catalog"}
+    # The first answer opened the conversation, so it carries a resume slip --
+    # and nothing about the tool call.
+    assert isinstance(answer.pop("resume"), str)
     assert answer == {"type": "ResponseGenerated", "text": "Temos vinte."}
 
 
@@ -514,3 +517,232 @@ def test_the_confirmation_carries_nothing_the_browser_did_not_send(
 
     assert set(recorded) == {"type", "answer", "useful"}
     assert "conversation" not in json.dumps(recorded)
+
+
+# --- resuming on the next page ----------------------------------------------
+
+
+def _answer(ws, text: str) -> dict:
+    """Like `_ask_and_answer`, but the whole ResponseGenerated frame."""
+    ws.send_json({"type": "QueryReceived", "text": text})
+    while True:
+        frame = ws.receive_json()
+        if frame["type"] == "ResponseGenerated":
+            return frame
+
+
+def _resume(ws, token: str) -> list[dict]:
+    ws.send_json({"type": "ResumeConversation", "token": token})
+    frame = ws.receive_json()
+    assert frame["type"] == "ConversationResumed"
+    assert set(frame) == {"type", "history", "answers"}
+    assert frame["answers"] == (
+        sum(1 for line in frame["history"] if line["who"] == "them")
+        if frame["history"] else 0
+    )
+    return frame["history"]
+
+
+def test_only_the_answer_that_opened_the_conversation_carries_a_slip(
+    wired,
+) -> None:
+    from test_messages import FakeModel
+
+    from libvox_core.agent.llm import Completion
+
+    public, _box, models = wired
+    models.append(FakeModel(Completion(text="Um."), Completion(text="Dois.")))
+    key = register_library(TENANT_A, origins=[ORIGIN])
+
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        first = _answer(ws, "primeira?")
+        second = _answer(ws, "segunda?")
+
+    assert isinstance(first["resume"], str) and len(first["resume"]) >= 40
+    assert "resume" not in second
+
+
+def test_the_next_page_picks_the_conversation_back_up(wired) -> None:
+    """The reason the slip exists: a new socket, the same conversation. The
+    panel gets back what the reader saw, and the model gets back what it
+    said -- so "e esse, tem?" still knows which book."""
+    from test_messages import FakeModel
+
+    from libvox_core.agent.llm import Completion, ToolIntent
+
+    public, _box, models = wired
+    model = FakeModel(
+        Completion(
+            intents=[ToolIntent("c1", "search_catalog", {"query": "machado"})]
+        ),
+        Completion(text="Dom Casmurro."),
+        Completion(text="Sim, está na estante."),
+    )
+    models.append(model)
+    key = register_library(TENANT_A, origins=[ORIGIN])
+
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        slip = _answer(ws, "algo do Machado?")["resume"]
+
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        history = _resume(ws, slip)
+        later = _answer(ws, "e esse, tem?")
+
+    # What the reader was shown, and nothing the tools returned.
+    assert history == [
+        {"who": "you", "text": "algo do Machado?"},
+        {"who": "them", "text": "Dom Casmurro."},
+    ]
+    # Still the same conversation: no second slip, and the model saw the first
+    # exchange, tool result included.
+    assert "resume" not in later
+    said = " ".join(str(m.get("content")) for m in model.sent[-1])
+    assert "algo do Machado?" in said
+    assert "Dom Casmurro." in said
+
+
+def test_a_rating_after_resuming_lands_on_the_answer_it_names(wired) -> None:
+    """The widget keeps counting from the restored answers, and so must the
+    server, or the first thumb on the new page rates the old page's answer."""
+    from test_messages import FakeModel
+
+    from libvox_core.agent.llm import Completion
+
+    public, _box, models = wired
+    models.append(FakeModel(Completion(text="Um."), Completion(text="Dois.")))
+    key = register_library(TENANT_A, origins=[ORIGIN])
+
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        slip = _answer(ws, "primeira?")["resume"]
+
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        _resume(ws, slip)
+        _answer(ws, "segunda?")
+        ws.send_json({"type": "AnswerRated", "answer": 2, "useful": True})
+        recorded = ws.receive_json()
+
+    assert recorded == {"type": "RatingRecorded", "answer": 2, "useful": True}
+    assert _ratings_of() == [("Dois.", True)]
+
+
+def _slip_for(wired, key: str) -> str:
+    from test_messages import FakeModel
+
+    from libvox_core.agent.llm import Completion
+
+    public, _box, models = wired
+    models.append(FakeModel(Completion(text="Um.")))
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        return _answer(ws, "primeira?")["resume"]
+
+
+def test_every_way_a_slip_fails_looks_the_same(wired) -> None:
+    """Another origin of the same library, another library, a made-up slip,
+    and a conversation `prune` already deleted: one empty history each, and no
+    hint of which. The reader starts afresh; a stranger learns nothing."""
+    import psycopg
+    from conftest import CONVERSATION_ADMIN
+
+    public, _box, _models = wired
+    other = "http://outro.exemplo"
+    key = register_library(TENANT_A, origins=[ORIGIN, other])
+    key_b = register_library(TENANT_B, origins=[ORIGIN])
+
+    slip = _slip_for(wired, key)
+
+    with open_chat(public, key, origin=other) as ws:
+        ws.receive_json()
+        assert _resume(ws, slip) == []
+
+    with open_chat(public, key_b) as ws:
+        ws.receive_json()
+        assert _resume(ws, slip) == []
+
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        assert _resume(ws, "x" * 43) == []
+
+    with psycopg.connect(CONVERSATION_ADMIN) as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM conversations")
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        assert _resume(ws, slip) == []
+
+
+def test_a_socket_already_talking_cannot_swap_its_conversation(wired) -> None:
+    from test_messages import FakeModel
+
+    from libvox_core.agent.llm import Completion
+
+    public, _box, models = wired
+    key = register_library(TENANT_A, origins=[ORIGIN])
+    slip = _slip_for(wired, key)
+
+    models.clear()
+    model = FakeModel(Completion(text="Novo."), Completion(text="Ainda novo."))
+    models.append(model)
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        _answer(ws, "outra coisa?")
+        ws.send_json({"type": "ResumeConversation", "token": slip})
+        _answer(ws, "e agora?")
+
+    said = " ".join(str(m.get("content")) for m in model.sent[-1])
+    assert "outra coisa?" in said
+    assert "primeira?" not in said
+
+
+def test_a_new_conversation_revokes_the_old_slip_at_once(wired) -> None:
+    """"Nova conversa" is the reader saying the old one is done. Waiting half
+    an hour for the slip to lapse would leave it working in that tab."""
+    public, _box, _models = wired
+    key = register_library(TENANT_A, origins=[ORIGIN])
+
+    from test_messages import FakeModel
+
+    from libvox_core.agent.llm import Completion
+
+    _models.append(FakeModel(Completion(text="Um.")))
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        slip = _answer(ws, "primeira?")["resume"]
+        ws.send_json({"type": "ForgetConversation"})
+
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        assert _resume(ws, slip) == []
+
+
+def test_no_frame_carries_the_conversation_id(wired) -> None:
+    import psycopg
+    from conftest import CONVERSATION_ADMIN
+    from test_messages import FakeModel
+
+    from libvox_core.agent.llm import Completion
+
+    public, _box, models = wired
+    models.append(FakeModel(Completion(text="Um.")))
+    key = register_library(TENANT_A, origins=[ORIGIN])
+
+    seen = []
+    with open_chat(public, key) as ws:
+        seen.append(ws.receive_json())
+        seen.append(_answer(ws, "primeira?"))
+    with open_chat(public, key) as ws:
+        seen.append(ws.receive_json())
+        ws.send_json({"type": "ResumeConversation", "token": seen[1]["resume"]})
+        seen.append(ws.receive_json())
+
+    with psycopg.connect(CONVERSATION_ADMIN) as conn, conn.cursor() as cur:
+        cur.execute("SELECT conversation_id::text FROM conversations")
+        (conversation_id,) = cur.fetchone()
+
+    wire = json.dumps(seen)
+    assert conversation_id not in wire
+    assert conversation_id.replace("-", "") not in wire

@@ -38,6 +38,10 @@ DEFAULT_PUBLIC_PORT = 8092
 
 DEFAULT_SESSION_TTL_S = 3600
 
+# A visit, not a day: long enough to read a record and come back with a
+# question, short enough that a resume slip left in a tab is worth little.
+DEFAULT_RESUME_TTL_S = 1800
+
 # /libvox-mcp's own default port. It has to be running in streamable-http mode,
 # which is the only mode where a session credential can travel at all.
 DEFAULT_MCP_URL = "http://127.0.0.1:8000/mcp"
@@ -202,6 +206,10 @@ class Settings:
     asks for opaque, short-lived and single-tenant, so compromise is bounded in
     time as well as in blast radius."""
 
+    resume_ttl_s: int = DEFAULT_RESUME_TTL_S
+    """How long the widget can pick a conversation back up after its last
+    answer. Idle time, renewed by every answer -- see `resume.py`."""
+
     @property
     def is_development(self) -> bool:
         return self.environment == "development"
@@ -272,5 +280,8 @@ class Settings:
             llm_timeout_s=float(os.environ.get("LIBVOX_LLM_TIMEOUT_S", "120")),
             session_ttl_s=int(
                 os.environ.get("LIBVOX_SESSION_TTL_S", DEFAULT_SESSION_TTL_S)
+            ),
+            resume_ttl_s=int(
+                os.environ.get("LIBVOX_RESUME_TTL_S", DEFAULT_RESUME_TTL_S)
             ),
         )

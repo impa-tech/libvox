@@ -12,6 +12,10 @@ This is that connection. The browser sends a **public widget key** and its
 life of the socket, and never serialized into a frame. A reader who reads every
 byte their browser received learns nothing they could replay elsewhere.
 
+**One thing does reach the browser on purpose: a resume slip**, so the next
+page of the OPAC can pick the conversation back up. It is not the session token
+and not the conversation id, and `resume.py` says what it is bound to and why.
+
 **What this module is not.** No agent, no tool registry, no prompt, no
 credential for a library's ILS. It translates a frame into `Inbound` and an
 answer into frames. The root README's test for whether the boundary sits in the
@@ -30,6 +34,7 @@ from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 
 from .agent.service import Inbound, respond
 from .config import Settings
+from .resume import MAX_TOKEN_CHARS, ResumeStore
 from .sessions import SessionStore
 from .tenants import resolve_channel, widget_config
 
@@ -66,9 +71,15 @@ for by the library, and a socket is an open invitation to send a novel."""
 
 
 def register_gateway(
-    app: FastAPI, *, settings: Settings, sessions: SessionStore
+    app: FastAPI,
+    *,
+    settings: Settings,
+    sessions: SessionStore,
+    resumes: ResumeStore | None = None,
 ) -> None:
     """Mount the web channel on the public application."""
+    if resumes is None:
+        resumes = ResumeStore(ttl_s=settings.resume_ttl_s)
 
     @app.websocket("/ws/v1/chat")
     async def chat(
@@ -134,9 +145,48 @@ def register_gateway(
         # needed to count.
         answers = 0
 
+        # The slip this socket's conversation can be resumed with on the next
+        # page -- see `resume.py`. Issued with the answer that opened the
+        # conversation, or redeemed from the browser; never the conversation
+        # id itself.
+        slip: str | None = None
+
         try:
             while True:
                 frame = await websocket.receive_json()
+
+                # Only before the first question: a socket already holding a
+                # conversation does not get to swap it for another.
+                presented = _resume(frame)
+                if presented is not None:
+                    if conversation_id is None and answers == 0:
+                        conversation_id, answers, history = _resumed(
+                            settings, resumes, presented, tenant_id, origin
+                        )
+                        if conversation_id is not None:
+                            slip = presented
+                        # `answers` because `history` is capped: the widget
+                        # numbers ratings from the whole conversation, not
+                        # from what fits on screen.
+                        await websocket.send_json(
+                            {
+                                "type": "ConversationResumed",
+                                "history": history,
+                                "answers": answers,
+                            }
+                        )
+                    continue
+
+                if _forget(frame):
+                    # "Nova conversa". The slip stops working now rather than
+                    # in half an hour; the conversation stays in the log, under
+                    # the retention it already had.
+                    if slip is not None:
+                        resumes.revoke(slip)
+                    slip = None
+                    conversation_id = None
+                    answers = 0
+                    continue
 
                 # Before `_question`, because that function is the whole of the
                 # inbound grammar: anything it does not recognise becomes "não
@@ -176,6 +226,7 @@ def register_gateway(
                         {"type": "ToolExecuting", "tool": tool_name}
                     )
 
+                opened = conversation_id is None
                 try:
                     answer, conversation_id = await respond(
                         settings,
@@ -204,12 +255,77 @@ def register_gateway(
                 }
                 if pages := _pages(answer.tool_calls):
                     generated["pages"] = pages
+                if opened and conversation_id is not None:
+                    slip = resumes.issue(tenant_id, origin, conversation_id)
+                    generated["resume"] = slip
+                elif slip is not None:
+                    resumes.touch(slip)
                 await websocket.send_json(generated)
                 answers += 1
         except WebSocketDisconnect:
             # Not an error. The conversation is already stored turn by turn, so
             # closing a tab loses the socket and nothing else.
             logger.info("web session closed for %s", tenant_id)
+
+
+def _resume(frame: object) -> str | None:
+    """The slip a `ResumeConversation` frame presents, or None.
+
+    Strict for the same reason `_question` is. The length cap is not
+    validation of the slip -- `ResumeStore` is that -- it keeps an arbitrary
+    string from becoming a dictionary key.
+    """
+    if not isinstance(frame, dict) or frame.get("type") != "ResumeConversation":
+        return None
+    token = frame.get("token")
+    if not isinstance(token, str) or not (0 < len(token) <= MAX_TOKEN_CHARS):
+        return None
+    return token
+
+
+def _forget(frame: object) -> bool:
+    return isinstance(frame, dict) and frame.get("type") == "ForgetConversation"
+
+
+def _resumed(
+    settings: Settings,
+    resumes: ResumeStore,
+    token: str,
+    tenant_id: str,
+    origin: str | None,
+) -> tuple[uuid.UUID | None, int, list[dict[str, str]]]:
+    """`(conversation, answers so far, what the reader was shown)`.
+
+    `(None, 0, [])` for every way a slip can fail -- unknown, expired, revoked,
+    issued to another library or another origin, or pointing at a conversation
+    `prune` has since deleted. The browser gets the same empty history for all
+    of them and starts afresh; telling them apart would tell a stranger which
+    one a slip they hold is.
+    """
+    from .agent import store
+
+    conversation_id = resumes.redeem(token, tenant_id, origin)
+    if conversation_id is None:
+        return None, 0, []
+
+    try:
+        with psycopg.connect(settings.conversation_dsn) as log:
+            seen = store.transcript(log, tenant_id, conversation_id)
+    except psycopg.Error:
+        logger.exception("could not resume a conversation for %s", tenant_id)
+        return None, 0, []
+
+    if seen is None:
+        resumes.revoke(token)
+        logger.info("a resume slip for %s outlived its conversation", tenant_id)
+        return None, 0, []
+
+    logger.info("resumed a web conversation for %s", tenant_id)
+    history = [
+        {"who": "you" if role == "user" else "them", "text": text}
+        for role, text in seen.lines
+    ]
+    return conversation_id, seen.answers, history
 
 
 def _pages(tool_calls: list) -> dict[str, bool] | None:
