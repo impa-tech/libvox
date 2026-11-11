@@ -534,9 +534,9 @@
       },
       /**
        * What the reader saw on the previous page, drawn back -- links
-       * included, which the server rebuilds from the log. No thumbs and no
-       * "Próximos ›" under these: a rating already given is not shown here,
-       * and "next" would page whatever the model searched last.
+       * included, which the server rebuilds from the log. No thumbs: a rating
+       * already given is not shown here. "Próximos ›" comes back under the
+       * last line only, from `ConversationResumed.pages`.
        */
       history: function (lines) {
         lines.forEach(function (line) {
@@ -686,6 +686,7 @@
         var history = frame.history || [];
         if (history.length) {
           ui.history(history);
+          ui.pages(frame.pages);
           // The server's count, not the lines drawn: the history is capped,
           // and a rating names an answer in the whole conversation.
           answers = typeof frame.answers === 'number' ? frame.answers : 0;

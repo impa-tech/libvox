@@ -170,7 +170,7 @@ def register_gateway(
                 presented = _resume(frame)
                 if presented is not None:
                     if conversation_id is None and answers == 0:
-                        conversation_id, answers, history = _resumed(
+                        conversation_id, answers, history, pages = _resumed(
                             settings,
                             resumes,
                             presented,
@@ -184,13 +184,16 @@ def register_gateway(
                         # `answers` because `history` is capped: the widget
                         # numbers ratings from the whole conversation, not
                         # from what fits on screen.
-                        await websocket.send_json(
-                            {
-                                "type": "ConversationResumed",
-                                "history": history,
-                                "answers": answers,
-                            }
-                        )
+                        resumed: dict[str, Any] = {
+                            "type": "ConversationResumed",
+                            "history": history,
+                            "answers": answers,
+                        }
+                        # Under the last line only, exactly as it was drawn
+                        # before the page changed.
+                        if pages:
+                            resumed["pages"] = pages
+                        await websocket.send_json(resumed)
                     continue
 
                 if _forget(frame):
@@ -315,14 +318,16 @@ def _resumed(
     origin: str | None,
     link: Builder | None = None,
     seen: dict[int, str] | None = None,
-) -> tuple[uuid.UUID | None, int, list[dict[str, Any]]]:
-    """`(conversation, answers so far, what the reader was shown)`.
+) -> tuple[
+    uuid.UUID | None, int, list[dict[str, Any]], dict[str, bool] | None
+]:
+    """`(conversation, answers so far, what the reader was shown, pages)`.
 
     With a link builder, the restored answers carry their links again, built
     from the searches in the log and the library's OPAC address as it is now;
     and `seen` is filled, so the socket links those books in later answers too.
 
-    `(None, 0, [])` for every way a slip can fail -- unknown, expired, revoked,
+    `(None, 0, [], None)` for every way a slip can fail -- unknown, expired, revoked,
     issued to another library or another origin, or pointing at a conversation
     `prune` has since deleted. The browser gets the same empty history for all
     of them and starts afresh; telling them apart would tell a stranger which
@@ -332,19 +337,19 @@ def _resumed(
 
     conversation_id = resumes.redeem(token, tenant_id, origin)
     if conversation_id is None:
-        return None, 0, []
+        return None, 0, [], None
 
     try:
         with psycopg.connect(settings.conversation_dsn) as log:
             transcript = store.transcript(log, tenant_id, conversation_id)
     except psycopg.Error:
         logger.exception("could not resume a conversation for %s", tenant_id)
-        return None, 0, []
+        return None, 0, [], None
 
     if transcript is None:
         resumes.revoke(token)
         logger.info("a resume slip for %s outlived its conversation", tenant_id)
-        return None, 0, []
+        return None, 0, [], None
 
     logger.info("resumed a web conversation for %s", tenant_id)
     known: dict[int, str] = {} if seen is None else seen
@@ -358,7 +363,8 @@ def _resumed(
             if links := record_links(text, known, link):
                 line["links"] = links
         history.append(line)
-    return conversation_id, transcript.answers, history
+    pages = {"next": True} if transcript.has_next else None
+    return conversation_id, transcript.answers, history, pages
 
 
 def _pages(tool_calls: list) -> dict[str, bool] | None:

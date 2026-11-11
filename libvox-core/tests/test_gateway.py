@@ -535,7 +535,7 @@ def _resume(ws, token: str) -> list[dict]:
     ws.send_json({"type": "ResumeConversation", "token": token})
     frame = ws.receive_json()
     assert frame["type"] == "ConversationResumed"
-    assert set(frame) == {"type", "history", "answers"}
+    assert set(frame) - {"pages"} == {"type", "history", "answers"}
     assert frame["answers"] == (
         sum(1 for line in frame["history"] if line["who"] == "them")
         if frame["history"] else 0
@@ -852,3 +852,59 @@ def test_the_next_page_redraws_the_answer_with_its_links(wired) -> None:
     assert later["links"] == [
         {"text": "Dom Casmurro", "href": "https://opac.ibict.br" + record}
     ]
+
+
+def _resumed_after_search(wired, result: dict, *, then: str | None = None) -> dict:
+    """Search once (and maybe ask once more), then resume on a new socket and
+    return the whole ConversationResumed frame."""
+    from test_messages import FakeModel
+
+    from libvox_core.agent.llm import Completion, ToolIntent
+
+    public, box, models = wired
+    box._result = result
+    completions = [
+        Completion(intents=[ToolIntent("c1", "search_catalog", {"query": "newton"})]),
+        Completion(text="Encontrei vários livros sobre Newton."),
+    ]
+    if then:
+        completions.append(Completion(text=then))
+    models.append(FakeModel(*completions))
+    key = register_library(TENANT_A, origins=[ORIGIN])
+
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        slip = _answer(ws, "livros sobre newton")["resume"]
+        if then:
+            _answer(ws, "obrigado")
+
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        ws.send_json({"type": "ResumeConversation", "token": slip})
+        return ws.receive_json()
+
+
+_MORE = {"index_status": "ready", "records": [], "truncated": True,
+         "next_offset": 5, "previous_offset": None}
+
+
+def test_the_next_button_survives_a_page_change(wired) -> None:
+    frame = _resumed_after_search(wired, _MORE)
+    assert frame["pages"] == {"next": True}
+
+
+def test_no_next_button_when_the_search_had_nothing_after(wired) -> None:
+    frame = _resumed_after_search(
+        wired,
+        {"index_status": "ready", "records": [], "truncated": False,
+         "next_offset": None, "previous_offset": None},
+    )
+    assert "pages" not in frame
+
+
+def test_no_next_button_when_the_last_answer_did_not_search(wired) -> None:
+    """The live rule: the button belongs under the answer a search produced.
+    A later turn with no search took it away, and a page change must not
+    bring it back."""
+    frame = _resumed_after_search(wired, _MORE, then="De nada!")
+    assert "pages" not in frame

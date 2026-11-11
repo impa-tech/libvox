@@ -907,7 +907,7 @@ wraps the handshake" means once you try to write it.
 | ← | `ToolExecuting` | the tool's **name**, and nothing else |
 | ← | `ResponseGenerated` | `text`, and `pages` — `{"next": true}` — when the answer's search has a page after this one, `resume` — a slip — on the answer that opened the conversation, and `links` — `[{"text", "href"}]` — when a book it names in bold has an OPAC page |
 | → | `ResumeConversation` | `token`, the slip; only before the socket's first question |
-| ← | `ConversationResumed` | `history` — `[{"who": "you"\|"them", "text", "links"?}]`, the last 40 lines — and `answers`, the count a rating continues from. Empty for every way a slip can fail |
+| ← | `ConversationResumed` | `history` — `[{"who": "you"\|"them", "text", "links"?}]`, the last 40 lines — `answers`, the count a rating continues from, and `pages` when the last answer's search has a page after it. Empty for every way a slip can fail |
 | → | `ForgetConversation` | nothing; "Nova conversa" — revokes the slip at once |
 | ← | `ErrorEvent` | a sentence for the reader |
 

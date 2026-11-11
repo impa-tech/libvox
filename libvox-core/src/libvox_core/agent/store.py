@@ -202,6 +202,11 @@ class Transcript:
     """Every spoken answer in the conversation, not only those in `lines` --
     the ordinal a rating names keeps counting from here."""
 
+    has_next: bool = False
+    """Whether the last answer came from a search with a page after it -- the
+    same question `gateway._pages` answers live, so the "Próximos ›" under the
+    last answer survives a page change."""
+
     records: tuple[tuple[int, str], ...] = ()
     """`(biblio_id, title)` from every search the conversation ran, oldest
     first. Not shown to anyone: it is what lets the next page link the books
@@ -268,7 +273,33 @@ def transcript(
             record for (content,) in cur.fetchall() for record in _titles(content)
         )
 
-    return Transcript(lines=lines, answers=answers, records=records)
+        # The last turn's last search, and only if that turn was answered:
+        # the button belongs under the answer the search produced. A turn
+        # that did not search draws no button, live or restored.
+        cur.execute(
+            "SELECT content FROM messages "
+            " WHERE conversation_id = %s AND role = 'tool' "
+            "   AND tool_name = 'search_catalog' "
+            "   AND message_id > (SELECT coalesce(max(message_id), 0) FROM messages "
+            "                      WHERE conversation_id = %s AND role = 'user') "
+            " ORDER BY message_id DESC LIMIT 1",
+            (conversation_id, conversation_id),
+        )
+        row = cur.fetchone()
+        answered = bool(lines) and lines[-1][0] == "assistant"
+        has_next = answered and row is not None and _has_next(row[0])
+
+    return Transcript(
+        lines=lines, answers=answers, has_next=has_next, records=records
+    )
+
+
+def _has_next(content: str | None) -> bool:
+    try:
+        result = json.loads(content or "")
+    except ValueError:
+        return False
+    return isinstance(result, dict) and result.get("next_offset") is not None
 
 
 def _titles(content: str | None) -> list[tuple[int, str]]:
