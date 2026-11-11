@@ -41,6 +41,12 @@ logger = logging.getLogger(__name__)
 
 MAX_RESULTS = 20
 
+MAX_OFFSET = 200
+"""How deep into one search a page may start. Matches
+`libvox_sync.search.MAX_OFFSET`, and /libvox-core's route refuses past it.
+Forty pages of five is further than anybody reads; past it, the useful
+answer is a narrower question, not a deeper page."""
+
 INSTRUCTIONS = """\
 Tools for searching a library's catalog and checking whether a book is
 currently on the shelf.
@@ -184,6 +190,18 @@ def create_server(settings: Settings | None = None) -> MCPServer:
                 ),
             ),
         ] = 5,
+        offset: Annotated[
+            int,
+            Field(
+                ge=0,
+                description=(
+                    "Where the page starts; 0, the default, is the first. Only "
+                    "for 'show me more' or 'go back': copy `next_offset` or "
+                    "`previous_offset` from the last result and repeat that "
+                    "search with every other argument unchanged."
+                ),
+            ),
+        ] = 0,
     ) -> SearchCatalogResult:
         """Search the library's catalog for books.
 
@@ -207,8 +225,14 @@ def create_server(settings: Settings | None = None) -> MCPServer:
         returns the same nothing while the patron waits.
 
         When `truncated` is true, more records matched than were returned: say
-        the library holds at least this many, never exactly this many, and
-        offer to narrow the search.
+        there are several books, never a number -- the page size is not a
+        count -- and offer to show the next ones or to narrow the search.
+
+        When the reader asks for more, repeat the same search with `offset`
+        set to `next_offset`; to go back, to `previous_offset`. That is a page
+        of the search already made, not a second search, and every other
+        argument stays as it was -- change one and the page belongs to a
+        different list.
 
         A year filter reaches only records the library catalogued with a date.
         When one is used, `undated_records` says how many matches carried no
@@ -243,6 +267,10 @@ def create_server(settings: Settings | None = None) -> MCPServer:
             # there were more. And /libvox-core's own route still carries
             # `le=20`, so a caller that skips this layer is still bounded.
             limit=min(limit, MAX_RESULTS),
+            # Clamped for the reason `limit` is: a model that asks for page
+            # forty-one gets the last page there is, not a validation error
+            # and a retry.
+            offset=min(offset, MAX_OFFSET),
         )
 
     @mcp.tool(

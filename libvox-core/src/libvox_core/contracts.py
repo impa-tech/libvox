@@ -52,6 +52,10 @@ class SearchCatalogResult(BaseModel):
     """How many records matched everything but the year filter and carry no
     year. `None` when no year was asked for, so a search that mentions no year
     is the same shape it always was."""
+    next_offset: int | None = None
+    """The `offset` of the page after this one, or `None` on the last page."""
+    previous_offset: int | None = None
+    """The `offset` of the page before this one, or `None` on the first."""
     searched_for: str | None = None
     """The query these records answer, when the index repaired a word the
     library does not have. `None` when nothing was repaired, which is almost

@@ -255,7 +255,8 @@ Searches indexed bibliographic metadata. **Never touches the live ILS.**
     "title":  "string?",
     "year_from": "integer?",       // a range over copyright_date, either half
     "year_to":   "integer?",       //   valid alone; the year is not text
-    "limit":  "integer? (default 5; more than 20 is served as 20)"
+    "limit":  "integer? (default 5; more than 20 is served as 20)",
+    "offset": "integer? (default 0; a later page of the same search, at most 200)"
   }
 }
 ```
@@ -265,7 +266,8 @@ Returns:
 | :--- | :--- |
 | `records` | Normalized records: `biblio_id`, `title`, `author`, `series`, `isbn`, `publisher`, `copyright_date`, `item_type`. |
 | `index_status` | `ready` \| `building` \| `stale` — see [Before the index is ready](#before-the-index-is-ready). |
-| `truncated` | More records matched than `limit` allowed. The model must say the library holds *at least* this many, never exactly this many. Without it, "the library has 3" when there are 30. |
+| `truncated` | More records matched than this page holds. The model must say there are several books, never a number — the page size is not a count — and offer the next ones. Without it, "the library has 3" when there are 30. |
+| `next_offset`, `previous_offset` | The `offset` of the page after and before this one, or absent. "Show me more" repeats the search with one of them copied in — a page of the same search, not a second one, and a number the model copies rather than computes. |
 | `undated_records` | Present only when a year was asked for: how many matches carry no publication year and so could not be reached by the filter. Measured in August 2026 against a real Koha, 955 of its 1356 records had no date, which is what turns "we have 14 from 1992" into a claim the catalogue does not support. That instance is a demo reset daily, so the figures are a snapshot and will not reproduce; the proportion is the point. |
 | `searched_for` | Present only when the query found nothing and a word was repaired against the ones this library catalogued. The records answer *this* query, not the one that was sent, and the model must name the word it looked up. |
 

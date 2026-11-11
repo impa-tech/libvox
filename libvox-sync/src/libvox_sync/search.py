@@ -5,11 +5,12 @@ at all. A patron searching a catalog never generates traffic against the
 library's own server — the whole architecture is arranged around that, and this
 function is where it becomes true.
 
-It returns five things and not one, because a list of records cannot say why
+It returns seven things and not one, because a list of records cannot say why
 it is empty -- nor that it answered a different question. `index_status`
 distinguishes "the library has nothing like that" from "I have not finished
 reading this library's catalogue", `truncated` distinguishes "three results"
-from "the first three of many", `undated_records` says how much of the
+from "the first three of many", `next_offset` and `previous_offset` say how
+to reach the pages around this one, `undated_records` says how much of the
 catalogue a year filter could not reach, and `searched_for` names the word that
 was actually searched when a typo was repaired. A caller that cannot tell those
 apart will state the wrong one confidently.
@@ -33,6 +34,16 @@ MAX_LIMIT = 20
 """Matches `libvox_mcp.server.MAX_RESULTS`. A larger page is not more helpful:
 the caller is a language model with a context window, and twenty records it
 reads beats a hundred it skims."""
+
+MAX_OFFSET = 200
+"""How far into a result list a page may start.
+
+Matches `libvox_mcp.server.MAX_OFFSET`, and is the bound on an `OFFSET` a
+stranger controls -- the same argument as `MAX_ANSWERS` in /libvox-core's
+gateway. Two hundred is forty pages of five, which is further than anybody
+reads; a reader who wants the two-hundred-and-first record about Newton wants
+a narrower question, and the model is told to offer one.
+"""
 
 # The configuration is written into the generated column, so the query has to
 # name the same one or the tsquery and the tsvector will not be comparable.
@@ -156,6 +167,18 @@ class SearchResult:
     stop "we have 14 books from 1992" from claiming completeness over a catalog
     where 70% of the records were never catalogued with a date.
     """
+
+    next_offset: int | None = None
+    """The `offset` that asks for the page after this one; `None` on the last.
+
+    Computed here rather than left to the model, because arithmetic is the one
+    thing a small model will get wrong while sounding sure of it -- asked for
+    "more" after a page of five, it is as likely to send 10 as 5. Copying a
+    number it was handed is something it does reliably.
+    """
+
+    previous_offset: int | None = None
+    """The `offset` of the page before this one; `None` on the first."""
 
     searched_for: str | None = None
     """The query these records actually answer, when it is not the one asked.
@@ -409,6 +432,24 @@ def fuse(
     return [rows[biblio_id] for biblio_id in ordered[:limit]]
 
 
+def fused_order(lexical: list[tuple], vector: list[tuple]) -> list[tuple]:
+    """Both arms as one list that every page of a search is cut from.
+
+    The fusion ranks the first `_CANDIDATES` of each arm, at the same depth on
+    every page; what the lexical arm found past that is appended in its own
+    order. Both halves matter for paging. Were the depth to grow with the
+    offset, a record the lexical arm placed sixtieth would start collecting a
+    score it did not have on page one, climb into a page the reader has already
+    seen, and drop out of the one they are about to see -- a book shown twice
+    and another never shown, with nothing to say which. A fixed head with a
+    tail after it is one ordering whatever page is asked for, and the head is
+    exactly what page one was before paging existed.
+    """
+    head = fuse(lexical[:_CANDIDATES], vector, limit=2 * _CANDIDATES)
+    seen = {row[0] for row in head}
+    return head + [row for row in lexical[_CANDIDATES:] if row[0] not in seen]
+
+
 def _as_vector(values: list[float]) -> str:
     """A pgvector literal, cast explicitly at the call site."""
     return "[" + ",".join(f"{value:.7g}" for value in values) + "]"
@@ -424,6 +465,7 @@ def search(
     year_from: int | None = None,
     year_to: int | None = None,
     limit: int = DEFAULT_LIMIT,
+    offset: int = 0,
     embedder: Embedder | None = None,
 ) -> SearchResult:
     """Find records in one library's index, most relevant first.
@@ -447,6 +489,12 @@ def search(
     typed into: `author` is how *"tem algum livro do X?"* arrives.
     `searched_for` says what was looked up when that happened, and is `None`
     when it did not.
+
+    `offset` pages through the same ranking: the records at positions
+    `offset .. offset+limit` of the list the first page was cut from. Every
+    page of one search is a slice of one ordering, so paging forward never
+    repeats a record and never skips one -- see the fusion below for why that
+    takes some care.
 
     Refuses a search with no terms at all. "Everything you have" is not a
     question the index should answer with an arbitrary twenty records, and a
@@ -473,6 +521,11 @@ def search(
         # out-of-range limit: silently returning 20 of 100 reads as "that is
         # all of them".
         raise ValueError(f"limit must be between 1 and {MAX_LIMIT}, got {limit}")
+
+    if offset < 0 or offset > MAX_OFFSET:
+        # Refused for the same reason as `limit`: the clamping belongs to
+        # /libvox-mcp, where a validation error costs the model a round.
+        raise ValueError(f"offset must be between 0 and {MAX_OFFSET}, got {offset}")
 
     conditions, params = _text_conditions(query, author, title)
 
@@ -518,16 +571,23 @@ def search(
     fusing = bool(query) and embedder is not None and embedder.configured
 
     # With one arm, exactly what it always was: one row more than asked for, to
-    # answer `truncated` without a second COUNT. With two, enough from each for
-    # the fusion to have something to agree about -- a top-6 fused against a
-    # top-50 would be the vector arm's ranking wearing a fusion's name.
-    fetch = _CANDIDATES if fusing else limit + 1
+    # answer `truncated` without a second COUNT, starting where the page does.
+    # With two, enough from each for the fusion to have something to agree
+    # about -- a top-6 fused against a top-50 would be the vector arm's ranking
+    # wearing a fusion's name -- plus the lexical rows past it that a later
+    # page reaches. The page is then cut in Python, after the fusion.
+    if fusing:
+        fetch = _CANDIDATES + offset + limit + 1
+        skip = 0
+    else:
+        fetch = limit + 1
+        skip = offset
 
     statement = (
         f"SELECT {columns} FROM discovery_active "
         f" WHERE {' AND '.join([*conditions, *year_conditions])} "
         f" ORDER BY {order_by} "
-        f" LIMIT %s"
+        f" LIMIT %s OFFSET %s"
     )
 
     with tenant_scope(conn, tenant_id) as scoped, scoped.cursor() as cur:
@@ -538,7 +598,7 @@ def search(
         row = cur.fetchone()
         status = row[0] if row else "building"
 
-        cur.execute(statement, [*params, *year_params, *rank_params, fetch])
+        cur.execute(statement, [*params, *year_params, *rank_params, fetch, skip])
         rows = cur.fetchall()
 
         # Only on the empty path, so a search that found something costs not one
@@ -546,8 +606,11 @@ def search(
         # can be justified: while there are records to show, the reader's own
         # words answered, and substituting them would be answering a question
         # they did not ask.
+        #
+        # And only on the first page. An empty page past the end of a search
+        # that found things is the end of the list, not a typo.
         searched_for: str | None = None
-        if not rows:
+        if not rows and offset == 0:
             # Every term the reader gave, not just `query`. The model asks
             # *"tem algum livro do Calkisn?"* as `{"author": "Calkisn"}` -- one
             # slip of one finger from a name this catalogue holds -- and while
@@ -567,7 +630,13 @@ def search(
                 _, retry = _text_conditions(*terms)
                 cur.execute(
                     statement,
-                    [*retry, *year_params, *([terms[0]] if query else []), fetch],
+                    [
+                        *retry,
+                        *year_params,
+                        *([terms[0]] if query else []),
+                        fetch,
+                        skip,
+                    ],
                 )
                 rows = cur.fetchall()
                 if rows:
@@ -624,7 +693,13 @@ def search(
                 vector_rows = cur.fetchall()
 
         if vector_rows:
-            rows = fuse(rows, vector_rows, limit=fetch)
+            rows = fused_order(rows, vector_rows)
+
+        if fusing:
+            # Without vector rows -- nothing close enough, or the embedder
+            # down -- this is the lexical arm alone, sliced the way its own
+            # OFFSET would have.
+            rows = rows[offset : offset + limit + 1]
 
         # Only when a year was asked for, and counted *within the search*: for
         # "pokemon since 1990" the useful number is how many pokemon records
@@ -644,11 +719,12 @@ def search(
     records = [dict(zip(_COLUMNS, r)) for r in rows[:limit]]
 
     logger.info(
-        "%s: search %r%s%s -> %d record(s)%s, index %s",
+        "%s: search %r%s%s%s -> %d record(s)%s, index %s",
         tenant_id,
         query or author or title or "",
         f" repaired to {searched_for!r}" if searched_for else "",
         f" [{year_from or ''}..{year_to or ''}]" if year_conditions else "",
+        f" from {offset}" if offset else "",
         len(records),
         " (truncated)" if truncated else "",
         status,
@@ -658,5 +734,7 @@ def search(
         records=records,
         truncated=truncated,
         undated_records=undated,
+        next_offset=offset + limit if truncated else None,
+        previous_offset=max(0, offset - limit) if offset else None,
         searched_for=searched_for,
     )

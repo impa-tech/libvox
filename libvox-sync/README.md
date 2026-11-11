@@ -293,6 +293,14 @@ The fusion is twenty lines of Python in `search.fuse`, not a CTE with two
 would make `_text_conditions` serve a third caller, while putting the logic
 somewhere no test can reach without a database.
 
+**Paging cuts every page from one fused list.** The fusion ranks the top 50 of
+each arm at the same depth on every page, and what the lexical arm found past
+that is appended in its own order (`search.fused_order`). Growing the depth
+with the offset would let a record the lexical arm placed sixtieth collect a
+score it did not have on page one and climb into a page the reader has already
+seen: one book shown twice, another never. With a fixed head, page one is
+exactly what it was before paging existed.
+
 #### Two things that are silent when you get them wrong
 
 **The query carries an instruction prefix and the record does not.**
@@ -333,7 +341,7 @@ so a corrected shelf mark costs nothing and a corrected title costs one
 embedding. Without it a nightly reimport of a stable catalogue would pay the
 full 3.2 minutes every night, and 37 for a collection of 100,000.
 
-`search` returns five things, because a list of records cannot say why it is
+`search` returns seven things, because a list of records cannot say why it is
 empty — nor that it answered a different question:
 
 | | Answers |
@@ -341,6 +349,7 @@ empty — nor that it answered a different question:
 | `records` | Most relevant first |
 | `index_status` | Whether an empty list means "we have nothing like that" or "I have not finished reading this catalogue" |
 | `truncated` | Whether "three results" is really "the first three of many" |
+| `next_offset`, `previous_offset` | Where the pages either side of this one start, or `None` |
 | `undated_records` | Whether "14 books from 1992" is all of them, or all of the ones anybody dated |
 | `searched_for` | Which word was looked up, when the one that was sent is not in this library |
 
@@ -390,7 +399,8 @@ have it", which is the failure `index_status` exists to prevent.
   come back empty rather than plausible.
 - **A limit outside 1–20.** Refused, not clamped — silently returning 20 of 100
   reads as "that is all of them". The ceiling matches
-  `libvox_mcp.server.MAX_RESULTS`, and a test asserts they stay equal.
+  `libvox_mcp.server.MAX_RESULTS`, and a test asserts they stay equal. An
+  `offset` outside 0–200 is refused the same way.
 - **A wildcard a patron typed.** `%` and `_` are escaped before reaching
   `ILIKE`. `/libvox-driver-koha` records a bare `%` matching an entire live
   catalog; here it matches nothing.

@@ -332,7 +332,7 @@ also run offline.
 
 | | |
 | :--- | :--- |
-| `search_catalog` | optional `query`, `author`, `title`, `year_from`, `year_to`, `limit` — at least one term |
+| `search_catalog` | optional `query`, `author`, `title`, `year_from`, `year_to`, `limit`, `offset` — at least one term |
 | `check_availability` | up to 5 `biblio_ids` |
 
 **`limit` defaults to 5 and is served as at most 20.** A larger page is not more
@@ -342,6 +342,12 @@ than refused. A bound stated only in the JSON schema is one a model under
 pressure stops reading, so the number is in the description the model sees, and
 `truncated` reports that more matched. Asking for zero is refused: that is not a
 smaller page, it is a request with no answer.
+
+**`offset` pages through one search, and is served as at most 200.** The result
+carries `next_offset` and `previous_offset`, and "show me more" is the same call
+with `offset` copied from one of them -- copied, because a small model asked to
+compute the next page after five is as likely to send 10 as 5. Past 200 is
+clamped like `limit`; a negative one is refused like a zero `limit`.
 
 **`LIBVOX_CORE_TIMEOUT` is 60 seconds, and belongs to a ladder.** Each layer is
 more patient than the one it waits on: the Koha driver allows thirty seconds per

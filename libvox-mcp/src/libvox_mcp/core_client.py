@@ -109,6 +109,7 @@ class CoreClient:
         year_from: int | None,
         year_to: int | None,
         limit: int,
+        offset: int = 0,
     ) -> SearchCatalogResult:
         body = await self._post(
             "/internal/v1/search_catalog",
@@ -120,6 +121,7 @@ class CoreClient:
                 "year_from": year_from,
                 "year_to": year_to,
                 "limit": limit,
+                "offset": offset,
             },
         )
         return SearchCatalogResult.model_validate(body)

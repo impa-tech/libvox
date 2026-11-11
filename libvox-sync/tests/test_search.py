@@ -20,6 +20,7 @@ from libvox_sync.db import apply_migrations, tenant_scope
 from libvox_sync.search import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
+    MAX_OFFSET,
     EmptySearch,
     index_status,
     search,
@@ -242,6 +243,55 @@ def test_an_out_of_range_limit_is_refused_not_clamped(app_conn, limit: int) -> N
     index(app_conn, TENANT_A, ACERVO)
     with pytest.raises(ValueError):
         search(app_conn, TENANT_A, "casmurro", limit=limit)
+
+
+# --- paging -----------------------------------------------------------------
+
+
+def test_pages_walk_the_whole_result_without_repeating_or_skipping(app_conn) -> None:
+    """Five at a time, and every record exactly once."""
+    index(
+        app_conn, TENANT_A, [(i, f"Romance {i}", "Vários", None) for i in range(1, 13)]
+    )
+
+    pages = [search(app_conn, TENANT_A, "romance", limit=5, offset=o) for o in (0, 5, 10)]
+    ids = [r["biblio_id"] for page in pages for r in page.records]
+
+    assert len(ids) == len(set(ids)) == 12
+    assert [p.truncated for p in pages] == [True, True, False]
+
+
+def test_each_page_says_where_its_neighbours_start(app_conn) -> None:
+    """Handed to the model, so it copies a number instead of computing one."""
+    index(
+        app_conn, TENANT_A, [(i, f"Romance {i}", "Vários", None) for i in range(1, 13)]
+    )
+
+    first, middle, last = (
+        search(app_conn, TENANT_A, "romance", limit=5, offset=o) for o in (0, 5, 10)
+    )
+
+    assert (first.previous_offset, first.next_offset) == (None, 5)
+    assert (middle.previous_offset, middle.next_offset) == (0, 10)
+    assert (last.previous_offset, last.next_offset) == (5, None)
+
+
+def test_a_page_past_the_end_is_empty_and_ready(app_conn) -> None:
+    index(app_conn, TENANT_A, ACERVO)
+
+    result = search(app_conn, TENANT_A, "machado", limit=5, offset=5)
+
+    assert result.records == []
+    assert result.index_status == "ready"
+    assert result.truncated is False
+    assert result.next_offset is None
+
+
+@pytest.mark.parametrize("offset", [-1, MAX_OFFSET + 1])
+def test_an_out_of_range_offset_is_refused_not_clamped(app_conn, offset: int) -> None:
+    index(app_conn, TENANT_A, ACERVO)
+    with pytest.raises(ValueError):
+        search(app_conn, TENANT_A, "casmurro", offset=offset)
 
 
 # --- isolation --------------------------------------------------------------
@@ -606,6 +656,17 @@ def test_a_search_that_finds_records_is_never_repaired(app_conn) -> None:
     result = search(app_conn, TENANT_A, "xadrez")
 
     assert _ids(result) == {1}
+    assert result.searched_for is None
+
+
+def test_an_empty_later_page_is_the_end_of_the_list_not_a_typo(app_conn) -> None:
+    """Only the first page repairs. Past the end, there is nothing to rescue."""
+    index_full(app_conn, TENANT_A, REPARAVEL)
+    vocabulary(app_conn, TENANT_A)
+
+    result = search(app_conn, TENANT_A, "xadres", offset=5)
+
+    assert result.records == []
     assert result.searched_for is None
 
 

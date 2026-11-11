@@ -46,6 +46,10 @@ class SearchRequest(BaseModel):
     year_from: int | None = None
     year_to: int | None = None
     limit: int = Field(default=5, ge=1, le=20)
+    # Kept in step with `libvox_sync.search.MAX_OFFSET` and /libvox-mcp's
+    # constant of the same name by hand. Refused here, clamped there, for the
+    # reason `MAX_AVAILABILITY_IDS` gives below.
+    offset: int = Field(default=0, ge=0, le=200)
 
 
 # How many records one availability call may ask about.
@@ -238,6 +242,7 @@ def register_routes(
                 year_from=request.year_from,
                 year_to=request.year_to,
                 limit=request.limit,
+                offset=request.offset,
                 embedder=embedder,
             )
 
@@ -246,6 +251,8 @@ def register_routes(
             records=[CatalogRecord(**record) for record in result.records],
             truncated=result.truncated,
             undated_records=result.undated_records,
+            next_offset=result.next_offset,
+            previous_offset=result.previous_offset,
             searched_for=result.searched_for,
         )
 

@@ -96,9 +96,24 @@ class SearchCatalogResult(BaseModel):
     truncated: bool = Field(
         default=False,
         description=(
-            "True when more records matched than `limit` allowed. Say the "
-            "library holds at least this many, never exactly this many, and "
-            "offer to narrow the search."
+            "True when more records matched than this page holds. Say there "
+            "are several books, never a number -- the page size is not a "
+            "count -- and offer to show the next ones or to narrow the search."
+        ),
+    )
+    next_offset: int | None = Field(
+        default=None,
+        description=(
+            "Present when there is a next page. To show it, repeat the same "
+            "search, every argument unchanged, with `offset` set to this number."
+        ),
+    )
+    previous_offset: int | None = Field(
+        default=None,
+        description=(
+            "Present when this is not the first page. To go back, repeat the "
+            "same search, every argument unchanged, with `offset` set to this "
+            "number."
         ),
     )
     undated_records: int | None = Field(

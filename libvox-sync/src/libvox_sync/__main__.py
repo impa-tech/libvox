@@ -438,6 +438,7 @@ def cmd_search(settings: Settings, args: argparse.Namespace) -> int:
                 author=args.author,
                 title=args.title,
                 limit=args.limit,
+                offset=args.offset,
                 embedder=embedder,
             )
     except (EmptySearch, ValueError) as exc:
@@ -468,6 +469,8 @@ def cmd_search(settings: Settings, args: argparse.Namespace) -> int:
 
     print(f"\n{len(result.records)} record(s)", end="")
     print(", and more matched than were shown" if result.truncated else "")
+    if result.next_offset is not None:
+        print(f"next page: --offset {result.next_offset}")
     return 0
 
 
@@ -605,6 +608,9 @@ def build_parser() -> argparse.ArgumentParser:
     search_cmd.add_argument("--title", help="Narrow to a title.")
     search_cmd.add_argument(
         "--limit", type=int, default=20, help="Records to return (1-20)."
+    )
+    search_cmd.add_argument(
+        "--offset", type=int, default=0, help="Where the page starts (0-200)."
     )
 
     tenant = sub.add_parser(

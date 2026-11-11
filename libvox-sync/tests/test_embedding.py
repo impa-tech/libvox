@@ -22,7 +22,7 @@ from libvox_sync.embedding import (
     text_of,
     truncate,
 )
-from libvox_sync.search import fuse
+from libvox_sync.search import fuse, fused_order
 
 CONFIGURED = EmbeddingSettings(
     base_url="http://embeddings.test/v1",
@@ -254,3 +254,48 @@ def test_a_tie_breaks_on_the_lexical_order_and_never_on_chance() -> None:
 
 def test_the_limit_is_the_limit() -> None:
     assert len(fuse([(n,) for n in range(20)], [(n,) for n in range(30, 50)], limit=5)) == 5
+
+
+# --- paging a fused ranking --------------------------------------------------
+
+
+def _pages(ordering: list[tuple], size: int) -> list[list[int]]:
+    return [
+        [row[0] for row in ordering[start : start + size]]
+        for start in range(0, len(ordering), size)
+    ]
+
+
+def test_every_page_of_a_fused_search_is_cut_from_one_ordering() -> None:
+    """A book shown twice and another never shown is what a moving ranking does.
+
+    Fetching deeper for a later page must not reorder the pages before it: the
+    ordering from a shallow fetch is a prefix of the ordering from a deep one.
+    """
+    lexical = [(n,) for n in range(1, 221)]
+    # The vector arm agrees with records the lexical arm put far down the list,
+    # which is exactly what would lift them if the fusion depth grew.
+    vector = [(n,) for n in (120, 3, 90, 200, 7, 61)]
+
+    shallow = fused_order(lexical[:56], vector)
+    deep = fused_order(lexical, vector)
+
+    assert deep[: len(shallow)] == shallow
+
+
+def test_pages_of_a_fused_search_never_repeat_and_never_skip() -> None:
+    lexical = [(n,) for n in range(1, 151)]
+    vector = [(n,) for n in (140, 2, 75, 999, 51)]
+
+    ids = [n for page in _pages(fused_order(lexical, vector), 5) for n in page]
+
+    assert len(ids) == len(set(ids))
+    assert set(ids) == {row[0] for row in lexical} | {row[0] for row in vector}
+
+
+def test_the_first_page_is_what_fusion_alone_returned() -> None:
+    """Paging must not change the answer a reader got before it existed."""
+    lexical = [(n,) for n in range(1, 120)]
+    vector = [(n,) for n in (80, 4, 33, 500)]
+
+    assert fused_order(lexical, vector)[:20] == fuse(lexical[:50], vector, limit=20)

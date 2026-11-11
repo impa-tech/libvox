@@ -23,7 +23,7 @@ from libvox_mcp.models import (
     CheckAvailabilityResult,
     SearchCatalogResult,
 )
-from libvox_mcp.server import MAX_RESULTS
+from libvox_mcp.server import MAX_OFFSET, MAX_RESULTS
 
 TENANT = "lib-furg"
 
@@ -210,6 +210,55 @@ async def test_a_limit_of_zero_is_still_refused(
 
     assert result.is_error is True
     assert core.calls == []
+
+
+async def test_a_search_starts_on_the_first_page(
+    mcp, core: FakeCore, authenticated
+) -> None:
+    async with Client(mcp) as client:
+        await client.call_tool("search_catalog", {"query": "Newton"})
+
+    assert core.calls[0][1]["offset"] == 0
+
+
+async def test_a_later_page_is_forwarded_as_asked(
+    mcp, core: FakeCore, authenticated
+) -> None:
+    async with Client(mcp) as client:
+        await client.call_tool("search_catalog", {"query": "Newton", "offset": 5})
+
+    assert core.calls[0][1]["offset"] == 5
+
+
+async def test_an_offset_past_the_maximum_is_served_as_the_maximum(
+    mcp, core: FakeCore, authenticated
+) -> None:
+    """Clamped for the reason `limit` is: a validation error costs a round."""
+    async with Client(mcp) as client:
+        await client.call_tool("search_catalog", {"query": "Newton", "offset": 9999})
+
+    assert core.calls[0][1]["offset"] == MAX_OFFSET
+
+
+async def test_a_negative_offset_is_refused(mcp, core: FakeCore, authenticated) -> None:
+    async with Client(mcp, raise_exceptions=False) as client:
+        result = await client.call_tool(
+            "search_catalog", {"query": "Newton", "offset": -5}
+        )
+
+    assert result.is_error is True
+    assert core.calls == []
+
+
+async def test_the_model_is_told_how_to_reach_the_next_page(mcp) -> None:
+    """Copying a number it was handed is reliable; computing one is not."""
+    async with Client(mcp) as client:
+        tools = {t.name: t for t in (await client.list_tools()).tools}
+
+    description = tools["search_catalog"].description or ""
+
+    assert "next_offset" in description
+    assert "previous_offset" in description
 
 
 async def test_the_instructions_name_every_tool_and_no_others(mcp) -> None:

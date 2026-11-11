@@ -116,6 +116,24 @@ def test_a_search_never_reaches_another_librarys_records(client) -> None:
     assert len(body["records"]) == 1
 
 
+def test_a_later_page_is_cut_from_the_same_search(client) -> None:
+    index_records(TENANT_A, ACERVO)
+
+    first = search(client, limit=1).json()
+    second = search(client, limit=1, offset=first["next_offset"]).json()
+
+    assert [r["biblio_id"] for r in first["records"]] == [4]
+    assert [r["biblio_id"] for r in second["records"]] == [11]
+    assert (first["previous_offset"], first["next_offset"]) == (None, 1)
+    assert (second["previous_offset"], second["next_offset"]) == (0, None)
+
+
+@pytest.mark.parametrize("offset", [-1, 201])
+def test_an_offset_out_of_range_is_refused(client, offset: int) -> None:
+    """Clamping is /libvox-mcp's job. A caller here sending 201 has a bug."""
+    assert search(client, offset=offset).status_code == 422
+
+
 def test_search_needs_the_service_token(settings, migrated) -> None:
     from fastapi.testclient import TestClient
 
