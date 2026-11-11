@@ -24,7 +24,12 @@
  * WHAT NEVER APPEARS HERE
  *
  * No session token: the browser sends a public widget key and the server keeps
- * the credential. No tenant id. No tool arguments and no tool results -- a
+ * the credential. No tenant id. No conversation id either -- what this file
+ * keeps is a *resume slip*, the one thing it is handed to give back: random,
+ * bound by the server to this library and this page's origin, valid half an
+ * hour from the last answer, and held in `sessionStorage` so it dies with the
+ * tab. It is what lets the next OPAC page carry on the same conversation; see
+ * `resume.py` for why it is not the conversation id. No tool arguments and no tool results -- a
  * ToolExecuting event carries a name, and this file turns that name into a
  * sentence. If a future event carries a catalogue record for display, it
  * arrives in ResponseGenerated as prose, because deciding what a reader is
@@ -60,6 +65,7 @@
       thanks: 'Obrigada por dizer.',
       next: 'Próximos ›',
       askNext: 'Mostre os próximos resultados.',
+      reset: 'Nova conversa',
     },
     en: {
       search_catalog: 'searching the catalogue…',
@@ -77,6 +83,7 @@
       thanks: 'Thank you for saying.',
       next: 'Next ›',
       askNext: 'Show me the next results.',
+      reset: 'New conversation',
     },
   };
 
@@ -96,6 +103,10 @@
     '.head button{margin-left:auto;background:transparent;border:0;color:inherit;',
     'font-size:20px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:6px}',
     '.head button:focus-visible{outline:2px solid #fff;outline-offset:1px}',
+    '.head button.reset{font-size:12px;font-weight:500;padding:4px 9px;',
+    'border:1px solid rgba(255,255,255,.6)}',
+    '.head button.reset:hover:not(:disabled){background:rgba(255,255,255,.15)}',
+    '.head button.reset:disabled{opacity:.5;cursor:default}',
     '.log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}',
     '.msg{max-width:85%;padding:9px 12px;border-radius:12px;font-size:14px;',
     'line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}',
@@ -259,8 +270,9 @@
    *
    * Knows nothing about sockets. `onSend` is optional: without it the composer
    * is disabled, which is exactly the preview the librarian's panel wants.
+   * `onReset` is too, and draws the "Nova conversa" button only when given.
    */
-  function render(host, config, onSend) {
+  function render(host, config, onSend, onReset) {
     config = config || {};
     var t = words(config.locale);  // reassigned by `configure`
 
@@ -281,6 +293,22 @@
     head.className = 'head';
     head.appendChild(document.createTextNode(config.assistant_name || DEFAULT_NAME));
     panel.appendChild(head);
+
+    // Now that the conversation survives a page change, reloading no longer
+    // starts a new one -- which it used to do without anybody noticing. This
+    // is the way to say "that one is done". Text, not an icon: a ↺ in the
+    // header of a chat reads as "reload", which is exactly what it is not.
+    var reset = null;
+    if (onSend && onReset) {
+      reset = document.createElement('button');
+      reset.type = 'button';
+      reset.className = 'reset';
+      reset.textContent = t.reset;
+      reset.addEventListener('click', function () {
+        if (!reset.disabled) onReset();
+      });
+      head.appendChild(reset);
+    }
 
     var log = document.createElement('div');
     log.className = 'log';
@@ -444,6 +472,22 @@
           },
         };
       },
+      /**
+       * What the reader saw on the previous page, drawn back. No thumbs and
+       * no "Próximos ›" under these: a rating already given is not shown
+       * here, and "next" would page whatever the model searched last.
+       */
+      history: function (lines) {
+        lines.forEach(function (line) {
+          api.say(line.text, line.who === 'you' ? 'you' : 'them');
+        });
+      },
+      /** Empty the log for a new conversation; the composer stays. */
+      clear: function () {
+        retirePages();
+        while (log.firstChild !== status) log.removeChild(log.firstChild);
+        api.status('');
+      },
       configure: function (next) {
         // Updated in place rather than re-rendered. Re-rendering would clear
         // the shadow root, and every handler already closed over the old log
@@ -457,6 +501,7 @@
           input.placeholder = t.placeholder;
           input.setAttribute('aria-label', t.placeholder);
           send.textContent = t.send;
+          if (reset) reset.textContent = t.reset;
         }
         if (next.welcome_message) api.say(next.welcome_message);
       },
@@ -464,6 +509,9 @@
         if (!onSend) return;
         input.disabled = !on;
         send.disabled = !on;
+        // Not while an answer is on its way: it would arrive into the new
+        // conversation's empty log, answering a question nobody can see.
+        if (reset) reset.disabled = !on;
         if (on) input.focus();
       },
       focus: function () {
@@ -485,9 +533,52 @@
     return api;
   }
 
+  /* ---------------------------------------------------------------- memory */
+
+  /**
+   * What this tab remembers between OPAC pages: the resume slip, and whether
+   * the panel was open.
+   *
+   * `sessionStorage`, never `localStorage`. It dies with the tab, and that is
+   * the privacy property rather than a limitation: at a shared catalogue
+   * terminal, the next reader opens a new tab and finds an empty widget, not
+   * the last person's questions. One entry per widget key, so two libraries'
+   * widgets on one page do not hand each other a slip.
+   *
+   * Every access in a try: storage can be disabled, full, or throw in a
+   * private window, and a widget that cannot remember should still work
+   * exactly as it did before it could.
+   */
+  function memory(key) {
+    var name = 'libvox:' + key;
+    function read() {
+      try {
+        return JSON.parse(window.sessionStorage.getItem(name) || '{}') || {};
+      } catch (error) {
+        return {};
+      }
+    }
+    function write(state) {
+      try {
+        window.sessionStorage.setItem(name, JSON.stringify(state));
+      } catch (error) {
+        // Nothing to do: the next page simply starts afresh.
+      }
+    }
+    return {
+      get: function (field) { return read()[field]; },
+      set: function (field, value) {
+        var state = read();
+        if (value === undefined || value === null) delete state[field];
+        else state[field] = value;
+        write(state);
+      },
+    };
+  }
+
   /* --------------------------------------------------------------- connect */
 
-  function connect(url, key, ui, onReady) {
+  function connect(url, key, ui, onReady, remembered) {
     var socket;
     var answers = 0;
     var pending = {};
@@ -498,6 +589,10 @@
       return null;
     }
 
+    // Held for the greeting: when there is a conversation to resume, the
+    // welcome is said only if it turns out there was not.
+    var welcome = null;
+
     socket.addEventListener('message', function (event) {
       var frame;
       try {
@@ -507,7 +602,34 @@
       }
 
       if (frame.type === 'SessionReadyEvent') {
-        onReady(frame);
+        var slip = remembered.get('resume');
+        if (slip) {
+          // Ask before saying anything: the panel stays closed to typing until
+          // the server says what this page's conversation is.
+          welcome = frame.welcome_message;
+          onReady(
+            Object.assign({}, frame, { welcome_message: null }), false, welcome
+          );
+          ui.status(ui.words.thinking);
+          socket.send(JSON.stringify({ type: 'ResumeConversation', token: slip }));
+        } else {
+          onReady(frame, true);
+        }
+      } else if (frame.type === 'ConversationResumed') {
+        ui.status('');
+        var history = frame.history || [];
+        if (history.length) {
+          ui.history(history);
+          // The server's count, not the lines drawn: the history is capped,
+          // and a rating names an answer in the whole conversation.
+          answers = typeof frame.answers === 'number' ? frame.answers : 0;
+        } else {
+          // Expired, revoked, or forgotten by a restart -- the server does
+          // not say which, and this does not need to know. A new conversation.
+          remembered.set('resume', null);
+          if (welcome) ui.say(welcome);
+        }
+        ui.enable(true);
       } else if (frame.type === 'ToolExecuting') {
         ui.status(ui.words[frame.tool] || ui.words.thinking);
       } else if (frame.type === 'ResponseGenerated') {
@@ -515,6 +637,8 @@
         ui.say(frame.text);
         ui.pages(frame.pages);
         ui.enable(true);
+        // Only the answer that opened the conversation carries one.
+        if (frame.resume) remembered.set('resume', frame.resume);
 
         // The same count the server keeps, and the only thing a rating names.
         // Incremented here and nowhere else: the greeting is not an answer,
@@ -543,7 +667,8 @@
 
     socket.addEventListener('close', function () {
       // Never silently. A widget that goes quiet reads as broken; one that says
-      // it lost the library, and offers the way back, does not.
+      // it lost the library, and offers the way back, does not. Reloading
+      // resumes the conversation now, through the slip.
       ui.status('');
       ui.enable(false);
       ui.offer(ui.words.reconnect, function () {
@@ -551,7 +676,22 @@
       });
     });
 
-    return socket;
+    return {
+      socket: socket,
+      /**
+       * "Nova conversa": the server revokes the slip and forgets which
+       * conversation this socket was in, this tab forgets the slip, and the
+       * count starts again. Same socket -- nothing to reconnect.
+       */
+      reset: function () {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: 'ForgetConversation' }));
+        }
+        remembered.set('resume', null);
+        answers = 0;
+        pending = {};
+      },
+    };
   }
 
   /* ------------------------------------------------------------------ boot */
@@ -604,8 +744,9 @@
 
     var panelHost = document.createElement('div');
     var opened = false;
-    var socket = null;
+    var link = null;
     var ui = null;
+    var remembered = memory(options.key);
 
     launcher.addEventListener('click', function () {
       if (opened) {
@@ -613,38 +754,63 @@
         floating.appendChild(launcher);
         launcher.textContent = launch();
         opened = false;
-        if (socket) socket.close();
-        socket = null;
+        // Closed on purpose, so the next page does not open it again. The
+        // conversation is kept: opening it later on this page or the next
+        // picks it back up.
+        remembered.set('open', null);
+        if (link) link.socket.close();
+        link = null;
         return;
       }
 
       floating.insertBefore(panelHost, launcher);
       launcher.textContent = words(options.locale).close;
       opened = true;
+      remembered.set('open', true);
 
-      ui = render(panelHost, { locale: options.locale, theme_color: accent }, function (text) {
-        ui.enable(false);
-        ui.status(ui.words.thinking);
-        socket.send(JSON.stringify({ type: 'QueryReceived', text: text }));
-      });
+      var greeting = null;
+      ui = render(
+        panelHost,
+        { locale: options.locale, theme_color: accent },
+        function (text) {
+          ui.enable(false);
+          ui.status(ui.words.thinking);
+          link.socket.send(JSON.stringify({ type: 'QueryReceived', text: text }));
+        },
+        function () {
+          if (link) link.reset();
+          ui.clear();
+          if (greeting) ui.say(greeting);
+          ui.focus();
+        }
+      );
       ui.enable(false);
 
-      socket = connect(options.url, options.key, ui, function (config) {
+      link = connect(options.url, options.key, ui, function (config, ready, held) {
+        // Kept for "Nova conversa", including when this page resumed and the
+        // greeting was held back rather than said.
+        greeting = config.welcome_message || held || greeting;
         // The library's own voice, which only arrives once the server has
         // decided who this key belongs to. Applied to the panel already on
         // screen; see `configure`.
         ui.configure(config);
-        ui.enable(true);
+        // Not yet when a conversation is being resumed: `connect` enables the
+        // composer once the history is back.
+        if (ready) ui.enable(true);
         // A library that renamed her after the snippet was pasted. The button
         // says the old name until the first session; from here on it does not.
         if (config.assistant_name) name = config.assistant_name;
         if (config.theme_color) floating.style.setProperty('--accent', config.theme_color);
-      });
+      }, remembered);
     });
 
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && opened) launcher.click();
     });
+
+    // Open on the last page, so open on this one -- the reader clicked a
+    // result in the middle of a conversation, not away from it.
+    if (remembered.get('open')) launcher.click();
   }
 
   window.LibVox = { render: render, mount: mount };
