@@ -8,3 +8,5 @@ dist/
 
 # Holds LIBVOX_CRYPTO_KEY, which decrypts every library's ILS credential.
 .env
+.env.*
+!.env.example

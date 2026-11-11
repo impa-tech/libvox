@@ -278,6 +278,52 @@ esta é onde ficam as bibliotecas com mais de uma página e os canais futuros.
 > script, e nada aparece na página sem erro visível. Um proxy com TLS na frente
 > das portas públicas é o primeiro item para qualquer coisa além de teste.
 
+### 7.1 Colando a linha no OPAC do Koha
+
+O OPAC não tem um arquivo de template para editar: a linha entra pela intranet
+do Koha, por um de dois caminhos.
+
+**Personalizações HTML** — aceita a linha exatamente como o `/app` mostra.
+
+1. Intranet → **Ferramentas → Personalizações HTML** (*HTML customizations*) →
+   **Nova entrada**.
+2. **Localização:** `opaccredits`, o rodapé do OPAC, renderizado junto do
+   `</body>`.
+3. **Biblioteca:** *Todas*, ou só a que vai ter o widget.
+4. Troque o editor para o **código-fonte** antes de colar. O editor visual
+   transforma a tag em texto, e o que aparece na página é a linha escrita, não
+   o botão.
+
+   ```html
+   <script src="http://SEU-HOST:8092/widget.js" data-key="wk_..." data-name="MARC.IA" data-color="#4f46e5"></script>
+   ```
+
+5. Salve e recarregue o OPAC.
+
+**Preferência `OPACUserJS`** — aqui a tag `<script>` **não funciona**: o Koha já
+coloca o conteúdo da preferência dentro de um `<script>`. A tag precisa ser
+criada por JavaScript:
+
+```js
+(function () {
+  var s = document.createElement('script');
+  s.src = 'http://SEU-HOST:8092/widget.js';
+  s.dataset.key = 'wk_...';
+  s.dataset.name = 'MARC.IA';
+  s.dataset.color = '#4f46e5';
+  document.body.appendChild(s);
+})();
+```
+
+Funciona porque o `widget.js` lê a configuração de `document.currentScript`, que
+também vale para um script inserido assim.
+
+Qualquer que seja o caminho, o botão aparece mesmo sem a origem registrada, e o
+clique é recusado. Registre a origem do OPAC (passo 1 acima) **exatamente** como
+aparece na barra de endereços: num Koha de testes, `http://localhost:8080` e
+`http://127.0.0.1:8080` são origens diferentes. E `127.0.0.1` em `SEU-HOST` só
+funciona no próprio computador do servidor. Para outra máquina, use o host real.
+
 ---
 
 ## 8. De volta ao `/admin`: ativar
@@ -397,5 +443,6 @@ confiantemente errada.
 - [ ] Conexão salva e **Testar conexão** dizendo que funcionou
 - [ ] Primeira importação concluída, e o Acervo listando registros
 - [ ] Widget configurado, com o endereço do OPAC registrado e o canal ligado
+- [ ] Linha do widget colada no OPAC do Koha (*Personalizações HTML* → `opaccredits`)
 - [ ] Situação da biblioteca em **Ativa**
 - [ ] Widget respondendo no OPAC de mentira (`./core.sh widget lib-…`)
