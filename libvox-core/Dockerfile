@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -6,13 +7,19 @@ WORKDIR /app
 # imports two siblings, and a Docker build context cannot reach outside itself.
 # Same arrangement, and the same reason, as /libvox-sync.
 
+# pip's cache lives in a BuildKit cache mount, outside every layer: a rebuild
+# that re-runs an install reuses the wheels already downloaded instead of
+# fetching them again, and the image stays as small as with --no-cache-dir.
+# Clear it with `docker builder prune --filter type=exec.cachemount`.
 COPY libvox-driver-koha ./libvox-driver-koha
 COPY libvox-sync ./libvox-sync
-RUN pip install --no-cache-dir -e ./libvox-driver-koha -e ./libvox-sync
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -e ./libvox-driver-koha -e ./libvox-sync
 
 COPY libvox-core/pyproject.toml libvox-core/README.md ./libvox-core/
 COPY libvox-core/src ./libvox-core/src
-RUN pip install --no-cache-dir -e ./libvox-core
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -e ./libvox-core
 
 # After the install, so editing a migration does not invalidate it. They are
 # data rather than code -- `pip install -e` never needed them, and `migrate`
