@@ -84,7 +84,7 @@ return [
      */
     'source_url' => trim((string) env(
         'LIBVOX_SOURCE_URL',
-        'https://github.com/anselmobattisti/libvox',
+        'https://github.com/impa-tech/libvox',
     )),
 
 ];
