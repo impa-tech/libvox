@@ -58,6 +58,8 @@
       yes: 'Sim, ajudou',
       no: 'Não ajudou',
       thanks: 'Obrigada por dizer.',
+      next: 'Próximos ›',
+      askNext: 'Mostre os próximos resultados.',
     },
     en: {
       search_catalog: 'searching the catalogue…',
@@ -73,6 +75,8 @@
       yes: 'Yes, it helped',
       no: 'It did not help',
       thanks: 'Thank you for saying.',
+      next: 'Next ›',
+      askNext: 'Show me the next results.',
     },
   };
 
@@ -117,6 +121,13 @@
     'background:var(--accent,#4f46e5);color:#fff}',
     '.rate svg{width:14px;height:14px;fill:currentColor}',
     '.rate .down svg{transform:rotate(180deg)}',
+    '.pages{display:flex;gap:6px;align-self:flex-start;margin:-4px 0 2px 2px}',
+    '.pages button{padding:4px 10px;border:1px solid #dcdce2;border-radius:6px;',
+    'background:transparent;color:#4a4a52;font-size:12px;cursor:pointer}',
+    '.pages button:hover:not(:disabled){border-color:var(--accent,#4f46e5);',
+    'color:var(--accent,#4f46e5)}',
+    '.pages button:focus-visible{outline:2px solid var(--accent,#4f46e5);outline-offset:1px}',
+    '.pages button:disabled{cursor:default;opacity:.45}',
     '.status span{display:inline-block;animation:pulse 1.4s ease-in-out infinite}',
     '@keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}',
     '@media (prefers-reduced-motion: reduce){.status span{animation:none}}',
@@ -300,6 +311,22 @@
 
     root.appendChild(panel);
 
+    // The "next" button under the latest answer, if it had one. Only the latest
+    // is live: "next" under an older answer would page whatever search the
+    // model ran most recently, which is not the list the reader is looking at.
+    var paging = [];
+    function retirePages() {
+      paging.forEach(function (b) { b.disabled = true; });
+      paging = [];
+    }
+
+    // Everything the reader sends goes through here -- typed or pressed.
+    function ask(text) {
+      retirePages();
+      api.say(text, 'you');
+      onSend(text);
+    }
+
     var api = {
       say: function (text, who) {
         var line = document.createElement('div');
@@ -336,6 +363,35 @@
         button.addEventListener('click', action);
         line.appendChild(button);
         log.insertBefore(line, status);
+        log.scrollTop = log.scrollHeight;
+      },
+      /**
+       * "Próximos ›" under an answer whose search has more.
+       *
+       * Only forward: the earlier pages are already in the log, and scrolling
+       * up is the way back. The button sends an ordinary question, in the
+       * reader's own words, and shows it in the log as one -- the model holds
+       * the offset, and the conversation reads the same whether the reader
+       * typed "mostre mais" or pressed the button.
+       */
+      pages: function (pages) {
+        retirePages();
+        if (!onSend || !pages || !pages.next) return;
+
+        var row = document.createElement('div');
+        row.className = 'pages';
+
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = t.next;
+        button.addEventListener('click', function () {
+          if (button.disabled) return;
+          ask(t.askNext);
+        });
+        row.appendChild(button);
+        paging.push(button);
+
+        log.insertBefore(row, status);
         log.scrollTop = log.scrollHeight;
       },
       /**
@@ -421,8 +477,7 @@
       var text = input.value.trim();
       if (!text || !onSend) return;
       input.value = '';
-      api.say(text, 'you');
-      onSend(text);
+      ask(text);
     });
 
     if (config.welcome_message) api.say(config.welcome_message);
@@ -458,6 +513,7 @@
       } else if (frame.type === 'ResponseGenerated') {
         ui.status('');
         ui.say(frame.text);
+        ui.pages(frame.pages);
         ui.enable(true);
 
         // The same count the server keeps, and the only thing a rating names.

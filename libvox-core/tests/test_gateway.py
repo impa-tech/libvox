@@ -221,6 +221,65 @@ def test_a_tool_call_is_announced_without_its_arguments_or_its_result(
     assert answer == {"type": "ResponseGenerated", "text": "Temos vinte."}
 
 
+def _searched(wired, result: dict) -> dict:
+    """One question whose answer came from one search with `result`."""
+    from test_messages import FakeModel
+
+    from libvox_core.agent.llm import Completion, ToolIntent
+
+    public, box, models = wired
+    box._result = result
+    models.append(
+        FakeModel(
+            Completion(
+                intents=[
+                    ToolIntent(
+                        call_id="c1",
+                        name="search_catalog",
+                        arguments={"query": "newton"},
+                    )
+                ]
+            ),
+            Completion(text="Pelo menos cinco."),
+        )
+    )
+    key = register_library(TENANT_A, origins=[ORIGIN])
+
+    with open_chat(public, key) as ws:
+        ws.receive_json()
+        ws.send_json({"type": "QueryReceived", "text": "livros sobre newton"})
+        ws.receive_json()  # ToolExecuting
+        return ws.receive_json()
+
+
+def test_an_answer_with_a_next_page_says_so_and_nothing_more(wired) -> None:
+    """The offset stays with the model. A button sends words, not a position."""
+    answer = _searched(
+        wired,
+        {"index_status": "ready", "records": [], "truncated": True,
+         "next_offset": 10, "previous_offset": 0},
+    )
+
+    assert answer["pages"] == {"next": True}
+
+
+def test_the_last_page_draws_no_button(wired) -> None:
+    """Going back is scrolling up; the earlier pages are already in the log."""
+    answer = _searched(
+        wired,
+        {"index_status": "ready", "records": [], "truncated": False,
+         "next_offset": None, "previous_offset": 5},
+    )
+
+    assert "pages" not in answer
+
+
+def test_a_search_that_fit_on_one_page_draws_no_button(wired) -> None:
+    answer = _searched(wired, {"index_status": "ready", "records": []})
+
+    assert "pages" not in answer
+
+
 def test_the_second_question_knows_what_the_first_was_about(wired) -> None:
     """Over one connection, without the browser ever seeing a conversation
     id: the gateway holds it, exactly as ./core.sh ask holds it with --in."""

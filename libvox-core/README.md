@@ -905,7 +905,7 @@ wraps the handshake" means once you try to write it.
 | ← | `SessionReadyEvent` | `assistant_name`, `welcome_message`, `theme_color`, `locale` |
 | → | `QueryReceived` | `text` |
 | ← | `ToolExecuting` | the tool's **name**, and nothing else |
-| ← | `ResponseGenerated` | `text` |
+| ← | `ResponseGenerated` | `text`, and `pages` — `{"next": true}` — when the answer's search has a page after this one |
 | ← | `ErrorEvent` | a sentence for the reader |
 
 `ToolExecuting` is the honest typing indicator: rather than animating dots for

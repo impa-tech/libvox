@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Any
 
 import psycopg
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
@@ -197,14 +198,43 @@ def register_gateway(
                     await _error(websocket, _SOMETHING_BROKE)
                     continue
 
-                await websocket.send_json(
-                    {"type": "ResponseGenerated", "text": answer.text}
-                )
+                generated: dict[str, Any] = {
+                    "type": "ResponseGenerated",
+                    "text": answer.text,
+                }
+                if pages := _pages(answer.tool_calls):
+                    generated["pages"] = pages
+                await websocket.send_json(generated)
                 answers += 1
         except WebSocketDisconnect:
             # Not an error. The conversation is already stored turn by turn, so
             # closing a tab loses the socket and nothing else.
             logger.info("web session closed for %s", tenant_id)
+
+
+def _pages(tool_calls: list) -> dict[str, bool] | None:
+    """Whether the answer's search has a page after this one.
+
+    A boolean and nothing else: it is what the widget needs to draw "Próximos
+    ›", and the button sends an ordinary question in the reader's words. The
+    offset stays with the model, which already has it -- in a frame it would be
+    one more number a stranger could edit and send back, for nothing the
+    reader can see.
+
+    Only forward. The earlier pages are already in the log above, and
+    scrolling up is the way back; a reader who asks for them in words still
+    gets them, through `previous_offset`.
+
+    The **last** search counts, because a turn that searched twice answered
+    from the second one. None when the turn did not search, or when its search
+    has nothing after this page, so a frame with no button carries no field.
+    """
+    for call in reversed(tool_calls):
+        if call.name != "search_catalog" or call.failed:
+            continue
+        result = call.result or {}
+        return {"next": True} if result.get("next_offset") is not None else None
+    return None
 
 
 def _question(frame: object) -> str | None:
