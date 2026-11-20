@@ -43,9 +43,9 @@ def a_driver(monkeypatch, *, raises=None, records: int = 1):
         def close(self) -> None:
             self.closed = True
 
-    monkeypatch.setattr(
-        "libvox_driver_koha.KohaDriver", FakeDriver, raising=False
-    )
+    # Where the driver is built from credentials -- the one factory Sync and
+    # Core share -- so the substitution reaches every caller.
+    monkeypatch.setattr("libvox_sync.drivers.KohaDriver", FakeDriver)
     return ils
 
 

@@ -40,7 +40,7 @@ jobs:
         # databases *and* running /libvox-portal's Pest suite, since the portal
         # owns libvox_tenant's schema. Worth doing later; not worth blocking the
         # 110 on.
-        module: [libvox-mcp, libvox-sync, libvox-driver-koha, libvox-core]
+        module: [libvox-mcp, libvox-sync, libvox-driver-koha, libvox-driver-evergreen, libvox-core]
 
     defaults:
       run:

@@ -24,7 +24,7 @@ authors = [
 # The two siblings are local directories in this repository, not published
 # packages, so they go in editable first:
 #
-#     pip install -e ../libvox-driver-koha -e ../libvox-sync
+#     pip install -e ../libvox-driver-koha -e ../libvox-driver-evergreen -e ../libvox-sync
 #
 # Why import them rather than reimplement: the Discovery Index query and the
 # credential decryption already exist and are tested, and a second definition of
@@ -41,6 +41,7 @@ dependencies = [
     "psycopg[binary]>=3.2,<4",
     "libvox-sync>=0.1",
     "libvox-driver-koha>=0.1",
+    "libvox-driver-evergreen>=0.1",
 ]
 
 [project.optional-dependencies]

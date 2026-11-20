@@ -23,13 +23,14 @@ authors = [
 # libvox-driver-koha is a sibling in this repository, not a published package.
 # Install it first, editable, or this one cannot resolve:
 #
-#     pip install -e ../libvox-driver-koha
+#     pip install -e ../libvox-driver-koha -e ../libvox-driver-evergreen
 #
-# It is a hard dependency, not an optional integration: without a driver there
+# They are hard dependencies, not an optional integration: without a driver there
 # is nothing to extract. httpx2 comes with it and is no longer listed here.
 dependencies = [
     "psycopg[binary]>=3.2,<4",
     "libvox-driver-koha>=0.1",
+    "libvox-driver-evergreen>=0.1",
 ]
 
 [project.optional-dependencies]

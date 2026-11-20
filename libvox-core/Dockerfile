@@ -12,9 +12,10 @@ WORKDIR /app
 # fetching them again, and the image stays as small as with --no-cache-dir.
 # Clear it with `docker builder prune --filter type=exec.cachemount`.
 COPY libvox-driver-koha ./libvox-driver-koha
+COPY libvox-driver-evergreen ./libvox-driver-evergreen
 COPY libvox-sync ./libvox-sync
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -e ./libvox-driver-koha -e ./libvox-sync
+    pip install -e ./libvox-driver-koha -e ./libvox-driver-evergreen -e ./libvox-sync
 
 COPY libvox-core/pyproject.toml libvox-core/README.md ./libvox-core/
 COPY libvox-core/src ./libvox-core/src

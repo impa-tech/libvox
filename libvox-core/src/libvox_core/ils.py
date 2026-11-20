@@ -13,7 +13,7 @@ application. So the portal asks the component the architecture already names as
 the one that may decrypt.
 
 **The answer is for the librarian, not for a patron.** It names her own server,
-the status it returned, and which Koha permission is missing, because those are
+the status it returned, and which permission her ILS says is missing, because those are
 the only sentences that fix anything and she is the person who can act on them.
 The rule that collapses this detail protects a member of the public reading a
 chat window; applying it to the owner of the server would be the same mistake
@@ -39,9 +39,10 @@ PROBE_SIZE = 1
 
 def check(settings: Settings, tenant_id: str) -> IlsCheckResult:
     """Try the handshake, and say what happened in a sentence."""
-    from libvox_driver_koha import DriverError, KohaDriver
+    from libvox_driver_koha import DriverError
     from libvox_sync.credentials import fetch
     from libvox_sync.db import tenant_scope
+    from libvox_sync.drivers import ILS_TYPES, from_credentials
 
     crypto_key = settings.require_crypto_key()
 
@@ -57,19 +58,14 @@ def check(settings: Settings, tenant_id: str) -> IlsCheckResult:
             detail="No catalogue connection has been saved for this library yet.",
         )
 
-    if credentials.ils_type != "koha":
+    if credentials.ils_type not in ILS_TYPES:
         return IlsCheckResult(
             ok=False,
             problem="no_driver",
             detail=f"LibVox has no driver for {credentials.ils_type}.",
         )
 
-    driver = KohaDriver(
-        credentials.base_url,
-        client_id=credentials.client_id,
-        client_secret=credentials.client_secret,
-        page_size=PROBE_SIZE,
-    )
+    driver = from_credentials(credentials, page_size=PROBE_SIZE)
     try:
         page = driver.fetch_page(None)
     except DriverError as exc:
