@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "libvox-driver-evergreen"
+version = "0.1.0"
+description = "Evergreen integration driver for LibVox"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "AGPL-3.0-or-later"
+
+# The copyright holder, which PEP 621 gives no field of its own. IMPA Tech holds
+# it, together with the LibVox team; the second entry is the technical contact.
+authors = [
+    { name = "IMPA Tech" },
+    { name = "Anselmo Luiz Éden Battisti", email = "anselmo.battisti@impatech.edu.br" },
+]
+
+# libvox-driver-koha is a sibling in this repository, not a published package.
+# It is here for the driver contract (BiblioRecord, Availability, the error
+# taxonomy) and the ISBD cleaning every MARC catalogue needs -- not for anything
+# Koha-specific. Install it first:
+#
+#     pip install -e ../libvox-driver-koha
+#
+# When the contract moves to a shared libvox-common, this line is what changes.
+#
+# Keep in sync with requirements.txt.
+dependencies = [
+    "httpx2>=2.10,<3",
+    "libvox-driver-koha>=0.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6,<0.17"]
+
+[project.scripts]
+libvox-driver-evergreen = "libvox_driver_evergreen.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/libvox_driver_evergreen"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+# Stated rather than inherited, for the reason /libvox-driver-koha gives: an
+# unpinned default selection changes what CI enforces without anyone deciding.
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

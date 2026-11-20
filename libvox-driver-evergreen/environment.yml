@@ -1,0 +1,20 @@
+# Conda environment for /libvox-driver-evergreen
+#
+#   conda env create -f environment.yml
+#   conda activate libvox-driver-evergreen
+#   pip install -e ../libvox-driver-koha
+#   pip install -e ".[dev]"
+
+name: libvox-driver-evergreen
+
+channels:
+  - conda-forge
+  # Anaconda's own channels now answer 429 without client registration, so an
+  # accidental fall-through to `defaults` fails the whole solve.
+  - nodefaults
+
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - -r requirements-dev.txt
