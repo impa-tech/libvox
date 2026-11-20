@@ -120,6 +120,32 @@ return [
         'client_secret' => 'Client secret',
         'client_secret_help' => 'Criptografado antes de ser gravado, e nunca mais exibido.',
         'client_secret_stored' => 'Há um segredo guardado, alterado pela última vez em :at. Deixe em branco para mantê-lo.',
+
+        'base_url_help' => 'O endereço da API do Koha, que costuma ser o da interface administrativa.',
+
+        // Evergreen não tem tela de chave de API: entra-se com usuário e
+        // senha de equipe. Só as frases que diferem do Koha estão aqui; as
+        // demais vêm das chaves acima.
+        'evergreen' => [
+            'base_url_help' => 'O endereço do servidor Evergreen, sem caminho -- por exemplo https://catalogo.biblioteca.br. A API REST (/openapi3) precisa estar habilitada; ela vem desligada numa instalação nova.',
+            'opac_url_help' => 'O endereço do catálogo público, por exemplo https://catalogo.biblioteca.br/eg/opac/home. Com ele, cada livro que a MARC.IA citar vira um link para a página do registro. Opcional.',
+            'section' => [
+                'credentials' => 'Conta de acesso',
+                'credentials_help' => 'O Evergreen não tem chave de API: o acesso é por usuário e senha de equipe. Crie uma conta só para a LibVox, com permissão de entrar como equipe e de ler o catálogo, e nada mais. A senha não pode conter dois-pontos.',
+            ],
+            'client_id' => 'Usuário',
+            'client_id_help' => 'O nome de usuário da conta de equipe da LibVox. Guardado como digitado.',
+            'client_secret' => 'Senha',
+            'client_secret_help' => 'Criptografada antes de ser gravada, e nunca mais exibida.',
+            'client_secret_stored' => 'Há uma senha guardada, alterada pela última vez em :at. Deixe em branco para mantê-la.',
+            'check' => [
+                'empty' => 'O login foi aceito, mas o catálogo respondeu sem nenhum registro. Confira se a conta tem permissão de ler o catálogo -- um acervo que parece vazio faz a assistente dizer que a biblioteca não tem nada.',
+                'unauthorized' => 'O Evergreen recusou o login. Confira o usuário e a senha, se a conta está ativa e se ela pode entrar como equipe.',
+                'token_refused' => 'O login foi aceito e o Evergreen abriu uma sessão -- e depois recusou essa mesma sessão. O usuário e a senha estão certos; o problema é do servidor.',
+                'permission_denied' => 'O login foi aceito, mas a conta não tem permissão para ler o catálogo.',
+                'upstream_error' => 'O endereço respondeu, mas não com a API do Evergreen. Confira se a API REST (/openapi3) está habilitada no servidor; ela vem desligada numa instalação nova.',
+            ],
+        ],
     ],
 
     'profile' => [

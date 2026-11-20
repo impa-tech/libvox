@@ -129,6 +129,32 @@ return [
         'client_secret' => 'Client secret',
         'client_secret_help' => 'Encrypted before it is stored, and never shown again.',
         'client_secret_stored' => 'A secret is stored, last changed :at. Leave blank to keep it.',
+
+        'base_url_help' => 'The address of Koha\'s API, which is usually the staff interface\'s.',
+
+        // Evergreen has no API-key screen: a library signs in with a staff
+        // username and password. Only the sentences that differ from Koha's
+        // are here; everything else comes from the keys above.
+        'evergreen' => [
+            'base_url_help' => 'The Evergreen server\'s address, without a path -- for example https://catalog.library.org. Its REST API (/openapi3) must be enabled; a fresh installation ships with it off.',
+            'opac_url_help' => 'The public catalogue\'s address, for example https://catalog.library.org/eg/opac/home. With it, every book MARC.IA names links to its record page. Optional.',
+            'section' => [
+                'credentials' => 'Sign-in account',
+                'credentials_help' => 'Evergreen has no API key: access is a staff username and password. Create an account just for LibVox, allowed to log in as staff and to read the catalogue, and nothing more. The password cannot contain a colon.',
+            ],
+            'client_id' => 'Username',
+            'client_id_help' => 'The username of LibVox\'s staff account. Stored as typed.',
+            'client_secret' => 'Password',
+            'client_secret_help' => 'Encrypted before it is stored, and never shown again.',
+            'client_secret_stored' => 'A password is stored, last changed :at. Leave blank to keep it.',
+            'check' => [
+                'empty' => 'The login was accepted, but the catalogue answered with no records at all. Check that the account may read the catalogue -- a catalogue that looks empty makes the assistant tell readers the library holds nothing.',
+                'unauthorized' => 'Evergreen refused the login. Check the username and the password, that the account is active, and that it may log in as staff.',
+                'token_refused' => 'The login was accepted and Evergreen opened a session -- then refused that same session. The username and password are right; this one is the server\'s.',
+                'permission_denied' => 'The login was accepted, but the account may not read the catalogue.',
+                'upstream_error' => 'The address answered, but not with Evergreen\'s API. Check that its REST API (/openapi3) is enabled; a fresh installation ships with it off.',
+            ],
+        ],
     ],
 
     'profile' => [
