@@ -20,9 +20,11 @@ wrong first.
 ## Rules
 
 - **`contract.py` is ILS-neutral.** It is the contract between the platform and
-  *any* driver, sitting here only because Koha is the first one. When
-  `/libvox-driver-folio` arrives it moves to a shared `libvox-common` — a file
-  move, provided nothing Koha-specific leaked into it. Adding a Koha detail there
+  *any* driver, sitting here only because Koha is the first one.
+  `/libvox-driver-evergreen` is the second, and imports it from here for now;
+  the next step is moving it to a shared `libvox-common` — a file move,
+  provided nothing Koha-specific leaked into it. `normalize.clean_text` (ISBD
+  punctuation, not Koha) is imported by the Evergreen driver too. Adding a Koha detail there
   turns a move into an untangling.
 - **The driver never learns which tenant it serves.** A request carries a
   connection — URL plus credential — not an identity. `handle()` rejects unknown
