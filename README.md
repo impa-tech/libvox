@@ -8,7 +8,7 @@
 ![Node](https://img.shields.io/badge/Node-22-green)
 ![PHP](https://img.shields.io/badge/PHP-8.5-777bb4)
 
-**LibVox** is an open-source, AI-powered conversational layer designed specifically for libraries. By leveraging **Large Language Models (LLMs)** and the **Model Context Protocol (MCP)**, LibVox acts as an intelligent, conversational bridge that simplifies public access to complex library collections managed by open-source Integrated Library Systems (ILS) such as Koha and FOLIO.
+**LibVox** is an open-source, AI-powered conversational layer designed specifically for libraries. By leveraging **Large Language Models (LLMs)** and the **Model Context Protocol (MCP)**, LibVox acts as an intelligent, conversational bridge that simplifies public access to complex library collections managed by open-source Integrated Library Systems (ILS). Two are supported today, **Koha** and **Evergreen**, each through its own driver.
 
 Developed as an applied research initiative, LibVox does not seek to modify or replace existing ILS deployments. Instead, it provides a scalable, multi-tenant SaaS middleware that translates natural language questions into structured API queries, serving heavy metadata from a locally indexed copy while retrieving real-time availability from the ILS itself.
 
@@ -17,7 +17,9 @@ Developed as an applied research initiative, LibVox does not seek to modify or r
 > reader on a library's OPAC page asks MARC.IA a question, and she answers from
 > that library's catalogue.
 >
-> Running today, against live Koha instances: **`/libvox-driver-koha`**;
+> Running today: two ILS drivers — **`/libvox-driver-koha`**, against live Koha
+> instances, and **`/libvox-driver-evergreen`**, tested end to end against
+> Evergreen 3.17 (see [Two drivers](#two-drivers-koha-and-evergreen));
 > **`/libvox-sync`**, which imports a whole catalogue into the Discovery Index on
 > request from the panel; **`/libvox-mcp`**, the tool layer; and
 > **`/libvox-core`** — the tenant boundary, MARC.IA's loop, the conversation log
@@ -111,10 +113,12 @@ flowchart LR
 
     subgraph Drivers ["5. ILS Drivers"]
         KohaDrv["☁️ Koha Driver"]:::integration
+        EvergreenDrv["☁️ Evergreen Driver"]:::integration
         FolioDrv["☁️ FOLIO Driver"]:::planned
     end
 
     KohaAPI["🏛️ Koha ILS"]:::legacy
+    EvergreenAPI["🏛️ Evergreen ILS"]:::legacy
 
     %% Channels to Hub
     %% --
@@ -157,9 +161,12 @@ flowchart LR
     %% Hub to Drivers
     Core <-->|Real-Time Check| KohaDrv
     Sync -.->|Bulk Fetch| KohaDrv
+    Core <-->|Real-Time Check| EvergreenDrv
+    Sync -.->|Bulk Fetch| EvergreenDrv
 
     %% Drivers to ILS
     KohaDrv <--> KohaAPI
+    EvergreenDrv <--> EvergreenAPI
 ```
 
 **Dashed is not built.** Only the web widget exists; WhatsApp, Telegram and
@@ -229,7 +236,7 @@ Rather than relying on rigid pre-planning agentic frameworks, the middleware orc
 
 ## 🔧 The MCP Tool Contract
 
-`/libvox-mcp` exposes a deliberately small tool surface. Every tool is ILS-agnostic: the same schema serves Koha, FOLIO, and any future driver.
+`/libvox-mcp` exposes a deliberately small tool surface. Every tool is ILS-agnostic: the same schema serves Koha, Evergreen, and any future driver.
 
 ### Three layers, one tool
 
@@ -815,7 +822,22 @@ sequenceDiagram
 
 Drivers are stateless by contract: they hold no tenant data between invocations, which is what makes horizontal scaling and per-tenant isolation cheap.
 
-The Koha driver is the reference implementation, validated against a live instance. The contract a second one must satisfy is a single file: [`contract.py`](libvox-driver-koha/src/libvox_driver_koha/contract.py).
+#### Two drivers: Koha and Evergreen
+
+LibVox ships two drivers. They produce the same `BiblioRecord` and `Availability`, implement the same `Driver` protocol and answer the same JSON invocation contract, so nothing above them knows which ILS a library runs. The library's `ils_type`, chosen in the portal, picks the driver, and one function does that for both Sync and Core: `from_credentials` in [`libvox_sync.drivers`](libvox-sync/src/libvox_sync/drivers/__init__.py).
+
+| | Koha — [`/libvox-driver-koha`](libvox-driver-koha/README.md) | Evergreen — [`/libvox-driver-evergreen`](libvox-driver-evergreen/README.md) |
+| :--- | :--- | :--- |
+| Credential | An API key (OAuth2 client credentials) on a patron with the `catalogue` permission | A staff username and password — Evergreen has no API key |
+| Catalogue walk (`/libvox-sync`) | `GET /api/v1/biblios`, offset pages | The OpenSRF gateway: `pcrud` pages `biblio.record_entry` by id, MARCXML included |
+| Availability (live) | `GET /api/v1/biblios/{id}/items` | REST API `GET /bib/{id}/holdings`, about one request per second per session |
+| Record id | `biblionumber` | `biblio.record_entry.id` |
+| Record link | `/cgi-bin/koha/opac-detail.pl?biblionumber=<id>` | `/eg/opac/record/<id>` |
+| Session | Token cached for the driver's lifetime | Logged out when the driver closes |
+
+Both are stored the same way: the portal keeps every library's connection in the same columns — `client_id` holds Koha's client id or Evergreen's username, and the encrypted `client_secret` holds the secret or the password — so the credential store never has to know which ILS it holds.
+
+The Koha driver came first and still hosts the contract both drivers import: [`contract.py`](libvox-driver-koha/src/libvox_driver_koha/contract.py). Moving it to a shared `libvox-common` is the next step. A third driver — FOLIO is the one drawn above — satisfies that same file and adds one branch to `from_credentials`, one value to the portal's `IlsType` and one to the `tenant_ils.ils_type` constraint.
 
 ---
 
@@ -830,9 +852,10 @@ LibVox is a modular ecosystem. Each package has a distinct responsibility within
 | `/libvox-db` | The one PostgreSQL server, on `pgvector/pgvector:pg17` because the Discovery Index searches by meaning as well as by word. A database per writer — the Tenant DB, the conversation log, the Discovery Index — plus a `_test` copy of each, and the three roles they share. See its [README](libvox-db/README.md). |
 | `/libvox-core` | The tenant boundary and MARC.IA herself: the agent loop, the tool implementations, the conversation log, and the web channel — a WebSocket and the widget a library embeds. Two ASGI applications on two ports, because the internal API selects a tenant from its request body and a browser must never reach it. See its [README](libvox-core/README.md). |
 | `/libvox-driver-koha` | The Koha integration, and the only component that knows what Koha looks like. Runs as a container against a live instance; see its [README](libvox-driver-koha/README.md). |
+| `/libvox-driver-evergreen` | The Evergreen integration, and the only component that knows what Evergreen looks like: its staff login, REST API, OpenSRF gateway and MARCXML. See its [README](libvox-driver-evergreen/README.md). |
 | `/libvox-mcp` | The MCP server — declares `search_catalog` and `check_availability`, delegates execution to `/libvox-core`. Runnable; see its [README](libvox-mcp/README.md). |
 | `/libvox-portal` | The Management Plane, and the owner of the Tenant DB. Laravel and Filament; two panels, one for the operator and one for the library. See its [README](libvox-portal/README.md). |
-| `/libvox-sync` | The ETL worker. Extracts a library's catalog through the Koha driver and publishes it into the Discovery Index as a new generation, driven from the portal's registry. See its [README](libvox-sync/README.md). |
+| `/libvox-sync` | The ETL worker. Extracts a library's catalog through that library's driver — Koha or Evergreen — and publishes it into the Discovery Index as a new generation, driven from the portal's registry. See its [README](libvox-sync/README.md). |
 | `/tools` | `koha.sh` — a CLI probe of the Koha REST API. `libvox-agent.sh` and `opencode.jsonc` — driving `/libvox-mcp` from an agent, against one library's real credentials without writing any of them down. `claude-mcp.sh` — pointing Claude Code at one library through the authenticated path. |
 
 ---
@@ -850,7 +873,7 @@ LibVox is a modular ecosystem. Each package has a distinct responsibility within
 **Why a driver per ILS?** ILS integrations are the least predictable part of the system — every institution runs a different version with different quirks. Isolating each one in a stateless service contains failures and lets a driver be updated without redeploying the platform.
 
 **Where the boundaries are:**
-* **LibVox reads an ILS and never writes to one.** No holds, no renewals, no patron record ever changes. The API key a library issues is read-only, and asking for more would buy one field with the power to alter loans.
+* **LibVox reads an ILS and never writes to one.** No holds, no renewals, no patron record ever changes. The API key or staff account a library gives LibVox only reads, and asking for more would buy one field with the power to alter loans.
 * **It stands beside the OPAC.** One more entry point, alongside the interfaces a library already runs.
 * **It runs off-the-shelf models.** LibVox is infrastructure, and is measured against models as they ship.
 * **Conversations are scoped to a session, never to a person.** The schema has no column for a name, an e-mail, a phone number, an IP or a platform identifier, and that absence is the enforcement.
@@ -867,6 +890,12 @@ Findings from the Koha test environment that shape the implementation:
 * **Short-lived tokens.** Koha OAuth2 tokens expire in 3600s; drivers must cache and refresh rather than re-authenticate per call.
 * **`like` matches inside words.** With no stemming and no relevance ranking, a search for `chess` returns *The Duchess of Malfi*. Any user-facing search built on the ILS directly inherits this; it is one of the reasons the Discovery Index exists. The bare term `%` matches the entire catalog, so wildcards in user input must be escaped.
 * **A full import is the reliable one.** `q={"timestamp":{">":"…"}}` on `/api/v1/biblios` answers HTTP 500, so the sync engine imports whole catalogues into a fresh generation and swaps it in one transaction. That path is correct about deletions, which a timestamp filter never would be.
+
+Findings from the Evergreen test environment (3.17.3, the MOBIUS Docker image), detailed in [`libvox-driver-evergreen/AGENTS.md`](libvox-driver-evergreen/AGENTS.md):
+
+* **The REST API ships disabled.** `/openapi3/v0` answers 404 until the server runs `openapi_server` and routes `/openapi3` to it. A library has to turn it on before LibVox can connect.
+* **A rate limit that answers 401.** The REST API allows about one request per second per session, and the second request inside that second gets `401 "Rate limit exceeded"` — the status of a refused credential. The driver tells the two apart by the message and paces itself, so an availability check costs about a second per record unless the library raises the limit.
+* **The REST API cannot list records.** The catalogue walk goes through the OpenSRF gateway instead, which always answers HTTP 200, carries the real status in its body, and echoes the session token in its error text — so nothing from it is logged raw.
 
 ---
 
