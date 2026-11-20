@@ -17,11 +17,17 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Lang;
 
 /**
  * Where this library's catalog is, and how LibVox authenticates against it.
+ *
+ * Koha signs in with an API key and Evergreen with a staff username and
+ * password. They are kept in the same two columns, so the form changes what it
+ * calls the fields, and its help text, and nothing about how they are stored.
  *
  * The secret is write-only, and that is a property of the whole system rather
  * than of this form: IlsCredentialStore has no read path, so there is nothing
@@ -79,10 +85,14 @@ class CatalogConnection extends Page implements HasForms
                             ->options(collect(IlsType::cases())
                                 ->mapWithKeys(fn (IlsType $t) => [$t->value => $t->label()])
                                 ->all())
+                            // Live, so the labels below follow the choice
+                            // before anything is saved.
+                            ->live()
                             ->required(),
 
                         TextInput::make('base_url')
                             ->label(__('portal.ils.base_url'))
+                            ->helperText(fn (Get $get): ?string => $this->forType('base_url_help', $get('ils_type')))
                             ->url()
                             ->required()
                             ->maxLength(255),
@@ -91,23 +101,23 @@ class CatalogConnection extends Page implements HasForms
                         // nowhere, which is what she did before it existed.
                         TextInput::make('opac_url')
                             ->label(__('portal.ils.opac_url'))
-                            ->helperText(__('portal.ils.opac_url_help'))
+                            ->helperText(fn (Get $get): string => $this->forType('opac_url_help', $get('ils_type')))
                             ->url()
                             ->rule('regex:/^https?:\/\//i')
                             ->maxLength(255),
                     ]),
 
-                Section::make(__('portal.ils.section.credentials'))
-                    ->description(__('portal.ils.section.credentials_help'))
+                Section::make(fn (Get $get): string => $this->forType('section.credentials', $get('ils_type')))
+                    ->description(fn (Get $get): string => $this->forType('section.credentials_help', $get('ils_type')))
                     ->schema([
                         TextInput::make('client_id')
-                            ->label(__('portal.ils.client_id'))
-                            ->helperText(__('portal.ils.client_id_help'))
+                            ->label(fn (Get $get): string => $this->forType('client_id', $get('ils_type')))
+                            ->helperText(fn (Get $get): string => $this->forType('client_id_help', $get('ils_type')))
                             ->required()
                             ->maxLength(255),
 
                         TextInput::make('client_secret')
-                            ->label(__('portal.ils.client_secret'))
+                            ->label(fn (Get $get): string => $this->forType('client_secret', $get('ils_type')))
                             ->password()
                             ->revealable(false)
                             ->autocomplete('new-password')
@@ -116,9 +126,9 @@ class CatalogConnection extends Page implements HasForms
                             // it from. Blank on edit means "keep the stored one".
                             ->dehydrated(fn (?string $state): bool => filled($state))
                             ->required(fn (): bool => $this->secretStoredAt === null)
-                            ->helperText(fn (): string => $this->secretStoredAt === null
-                                ? __('portal.ils.client_secret_help')
-                                : __('portal.ils.client_secret_stored', ['at' => $this->secretStoredAt]))
+                            ->helperText(fn (Get $get): string => $this->secretStoredAt === null
+                                ? $this->forType('client_secret_help', $get('ils_type'))
+                                : $this->forType('client_secret_stored', $get('ils_type'), ['at' => $this->secretStoredAt]))
                             ->maxLength(512),
                     ]),
             ])
@@ -207,11 +217,31 @@ class CatalogConnection extends Page implements HasForms
             'upstream_error', 'not_configured', 'no_driver', 'core_unreachable',
         ];
 
-        return __('portal.ils.check.'.(
+        return $this->forType('check.'.(
             in_array($this->check['problem'], $known, true)
                 ? $this->check['problem']
                 : 'unknown'
-        ));
+        ), $this->data['ils_type'] ?? null);
+    }
+
+    /**
+     * A string of this page, in the words of the chosen ILS.
+     *
+     * Most strings say the same thing for every system. The ones that name a
+     * Koha permission or a Koha screen have an Evergreen counterpart under
+     * `portal.ils.evergreen.*`; anything without one falls back to the shared
+     * string, so a new key never renders as its own name.
+     */
+    public function forType(string $key, mixed $type, array $replace = []): string
+    {
+        $value = $type instanceof IlsType ? $type->value : $type;
+
+        if (is_string($value) && $value !== IlsType::Koha->value
+            && Lang::has("portal.ils.{$value}.{$key}")) {
+            return __("portal.ils.{$value}.{$key}", $replace);
+        }
+
+        return Lang::has("portal.ils.{$key}") ? __("portal.ils.{$key}", $replace) : '';
     }
 
     private function tenantId(): string

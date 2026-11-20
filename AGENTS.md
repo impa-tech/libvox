@@ -12,7 +12,7 @@ Human workflow — branches, commits, review — is in [`CONTRIBUTING.md`](CONTR
 once, and this file used to warn that most of it was unbuilt — that warning is
 what is now out of date.
 
-**Six modules, and the spine runs end to end.** A reader asks MARC.IA a question
+**Seven modules, and the spine runs end to end.** A reader asks MARC.IA a question
 on a library's OPAC page and she answers from that library's catalogue.
 
 | Module | What it is |
@@ -21,6 +21,7 @@ on a library's OPAC page and she answers from that library's catalogue.
 | `/libvox-mcp` | The MCP tool layer. Declares two tools; implements none |
 | `/libvox-sync` | Extraction and the Discovery Index — schema and pipeline |
 | `/libvox-driver-koha` | Everything that knows what a Koha looks like |
+| `/libvox-driver-evergreen` | Everything that knows what an Evergreen looks like |
 | `/libvox-portal` | Laravel. The registry, encrypted ILS credentials, channel bindings |
 | `/libvox-db` | One PostgreSQL server, six databases, three roles. No application code |
 

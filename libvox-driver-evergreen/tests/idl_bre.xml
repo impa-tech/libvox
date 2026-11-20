@@ -1,0 +1,80 @@
+<IDL xmlns='http://opensrf.org/spec/IDL/base/v1' xmlns:idl='http://opensrf.org/spec/IDL/base/v1' xmlns:oils_persist='http://open-ils.org/spec/opensrf/IDL/persistence/v1' xmlns:oils_obj='http://open-ils.org/spec/opensrf/IDL/objects/v1' xmlns:reporter='http://open-ils.org/spec/opensrf/IDL/reporter/v1' xmlns:sr='http://open-ils.org/spec/opensrf/IDL/simple-reporter/v1' xmlns:permacrud='http://open-ils.org/spec/opensrf/IDL/permacrud/v1' xmlns:repsec='http://open-ils.org/spec/opensrf/IDL/reporter/v1/security'><class id='bre' controller='open-ils.cstore open-ils.pcrud' oils_obj:fieldmapper='biblio::record_entry' oils_persist:tablename='biblio.record_entry' reporter:core='true' reporter:label='Bibliographic Record'>
+		<fields oils_persist:primary='id' oils_persist:sequence='biblio.record_entry_id_seq'>
+			<field reporter:label='Call Numbers' name='call_numbers' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Fixed Field Entry' name='fixed_fields' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Is Active?' name='active' reporter:datatype='bool'></field>
+			<field reporter:label='Record Creation Date/Time' name='create_date' reporter:datatype='timestamp'></field>
+			<field reporter:label='Record Creator' name='creator' reporter:datatype='link'></field>
+			<field reporter:label='Is Deleted?' name='deleted' reporter:datatype='bool'></field>
+			<field reporter:label='Last Edit Date/Time' name='edit_date' reporter:datatype='timestamp'></field>
+			<field reporter:label='Last Editing User' name='editor' reporter:datatype='link'></field>
+			<field reporter:label='Fingerprint' name='fingerprint' reporter:datatype='text'></field>
+			<field reporter:label='Record ID' name='id' reporter:datatype='id'></field>
+			<field reporter:label='Last Transaction ID' name='last_xact_id' reporter:datatype='text' oils_obj:required='true'></field>
+			<field reporter:label='MARC21Slim' name='marc' reporter:datatype='text' oils_obj:required='true'></field>
+			<field reporter:label='Overall Quality' name='quality' reporter:datatype='int'></field>
+			<field reporter:label='Record Source' name='source' reporter:datatype='link'></field>
+			<field reporter:label='TCN Source' name='tcn_source' reporter:datatype='text'></field>
+			<field reporter:label='TCN Value' name='tcn_value' reporter:datatype='text'></field>
+			<field reporter:label='Owner' name='owner' reporter:datatype='org_unit'></field>
+			<field reporter:label='Share Depth' name='share_depth' reporter:datatype='int'></field>
+			<field reporter:label='Metarecord' name='metarecord' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Language Code' name='language' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Non-MARC Record Notes' name='notes' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Indexed Keyword Field Entries' name='keyword_field_entries' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Indexed Subject Field Entries' name='subject_field_entries' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Indexed Title Field Entries' name='title_field_entries' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Indexed Identifier Field Entries' name='identifier_field_entries' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Indexed Author Field Entries' name='author_field_entries' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Indexed Series Field Entries' name='series_field_entries' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Flattened MARC Fields ' name='full_record_entries' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Simple Record Extracts ' name='simple_record' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Authority Links' name='authority_links' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Subscriptions' name='subscriptions' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='SVF Attributes' name='attrs' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='MVF Attributes' name='mattrs' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Display Fields' name='display_entries' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Flat Display Entries' name='flat_display_entries' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Compressed Display Entries' name='compressed_display_entries' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Wide Display Entries' name='wide_display_entry' oils_persist:virtual='true' reporter:datatype='link'></field>
+			<field reporter:label='Merge Date' name='merge_date' reporter:datatype='timestamp'></field>
+			<field reporter:label='Merged To' name='merged_to' reporter:datatype='link'></field>
+		</fields>
+		<links>
+			<link field='owner' reltype='has_a' key='id' map='' class='aou'></link>
+			<link field='editor' reltype='has_a' key='id' map='' class='au'></link>
+			<link field='creator' reltype='has_a' key='id' map='' class='au'></link>
+			<link field='simple_record' reltype='might_have' key='id' map='' class='rmsr'></link>
+			<link field='metarecord' reltype='might_have' key='source' map='metarecord' class='mmrsm'></link>
+			<link field='call_numbers' reltype='has_many' key='record' map='' class='acn'></link>
+			<link field='keyword_field_entries' reltype='has_many' key='source' map='' class='mkfe'></link>
+			<link field='fixed_fields' reltype='might_have' key='record' map='' class='mrd'></link>
+			<link field='language' reltype='might_have' key='record' map='item_lang' class='mrd'></link>
+			<link field='subject_field_entries' reltype='has_many' key='source' map='' class='msfe'></link>
+			<link field='title_field_entries' reltype='has_many' key='source' map='' class='mtfe'></link>
+			<link field='identifier_field_entries' reltype='has_many' key='source' map='' class='mife'></link>
+			<link field='notes' reltype='has_many' key='record' map='' class='bren'></link>
+			<link field='author_field_entries' reltype='has_many' key='source' map='' class='mafe'></link>
+			<link field='series_field_entries' reltype='has_many' key='source' map='' class='msefe'></link>
+			<link field='full_record_entries' reltype='has_many' key='record' map='' class='mfr'></link>
+			<link field='authority_links' reltype='has_many' key='bib' map='' class='abl'></link>
+			<link field='subscriptions' reltype='has_many' key='record_entry' map='' class='ssub'></link>
+			<link field='attrs' reltype='might_have' key='id' map='' class='mra'></link>
+			<link field='mattrs' reltype='has_many' key='id' map='' class='mraf'></link>
+			<link field='source' reltype='has_a' key='id' map='' class='cbs'></link>
+			<link field='display_entries' reltype='has_many' key='source' map='' class='mde'></link>
+			<link field='flat_display_entries' reltype='has_many' key='source' map='' class='mfde'></link>
+			<link field='compressed_display_entries' reltype='has_many' key='source' map='' class='mcde'></link>
+			<link field='wide_display_entry' reltype='might_have' key='source' map='' class='mwde'></link>
+			<link field='merged_to' reltype='has_a' key='id' map='' class='bre'></link>
+		</links>
+		<permacrud xmlns='http://open-ils.org/spec/opensrf/IDL/permacrud/v1'>
+			<actions>
+				<create permission='CREATE_MARC IMPORT_MARC' global_required='true'></create>
+				<retrieve></retrieve>
+				<update permission='UPDATE_MARC' global_required='true'></update>
+		
+				<delete permission='DELETE_RECORD' global_required='true'></delete>
+			</actions>
+		</permacrud>
+	</class></IDL>

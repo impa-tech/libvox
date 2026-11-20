@@ -14,7 +14,8 @@ WORKDIR /app
 # The sibling driver first: it changes less often than this module's source,
 # and it brings httpx2 with it.
 COPY libvox-driver-koha ./libvox-driver-koha
-RUN pip install --no-cache-dir -e ./libvox-driver-koha
+COPY libvox-driver-evergreen ./libvox-driver-evergreen
+RUN pip install --no-cache-dir -e ./libvox-driver-koha -e ./libvox-driver-evergreen
 
 # Editable, both of them, and deliberately: the migration runner locates
 # `migrations/` relative to its own file, so a site-packages copy would look

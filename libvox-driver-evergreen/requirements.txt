@@ -1,0 +1,6 @@
+# Runtime dependencies. Keep in sync with pyproject.toml.
+httpx2>=2.10,<3
+
+# The driver contract and the ISBD cleaning, from the sibling module -- see the
+# note in pyproject.toml. An editable install, because it is not published.
+-e ../libvox-driver-koha

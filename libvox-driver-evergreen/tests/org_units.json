@@ -1,0 +1,163 @@
+[
+  {
+    "id": 1,
+    "name": "Example Consortium",
+    "shortname": "CONS",
+    "opac_visible": true,
+    "parent_ou": null
+  },
+  {
+    "id": 2,
+    "name": "Rohan Public Library System",
+    "shortname": "RPLS",
+    "opac_visible": true,
+    "parent_ou": 1
+  },
+  {
+    "id": 3,
+    "name": "Shire Public Library System",
+    "shortname": "SPLS",
+    "opac_visible": true,
+    "parent_ou": 1
+  },
+  {
+    "id": 4,
+    "name": "West Emnet Public Library",
+    "shortname": "RPLS-WEPL",
+    "opac_visible": true,
+    "parent_ou": 2
+  },
+  {
+    "id": 5,
+    "name": "Helm's Deep Public Library",
+    "shortname": "RPLS-HDPL",
+    "opac_visible": true,
+    "parent_ou": 2
+  },
+  {
+    "id": 6,
+    "name": "Hobbiton Public Library",
+    "shortname": "SPLS-HPL",
+    "opac_visible": true,
+    "parent_ou": 3
+  },
+  {
+    "id": 7,
+    "name": "Bree Public Library",
+    "shortname": "SPLS-BPL",
+    "opac_visible": true,
+    "parent_ou": 3
+  },
+  {
+    "id": 8,
+    "name": "Edoras History Library",
+    "shortname": "RPLS-EHL",
+    "opac_visible": true,
+    "parent_ou": 4
+  },
+  {
+    "id": 9,
+    "name": "Shire Public Library System Bookmobile",
+    "shortname": "SPLS-BKM",
+    "opac_visible": true,
+    "parent_ou": 6
+  },
+  {
+    "id": 101,
+    "name": "Leilholm Public Library",
+    "shortname": "LPLS",
+    "opac_visible": true,
+    "parent_ou": 1
+  },
+  {
+    "id": 102,
+    "name": "Godric's Hollow Library",
+    "shortname": "LPLS-GOD",
+    "opac_visible": true,
+    "parent_ou": 101
+  },
+  {
+    "id": 103,
+    "name": "Wiltshire Library",
+    "shortname": "LPLS-WIL",
+    "opac_visible": true,
+    "parent_ou": 101
+  },
+  {
+    "id": 104,
+    "name": "Smallville Public Library System",
+    "shortname": "SMALL",
+    "opac_visible": true,
+    "parent_ou": 1
+  },
+  {
+    "id": 105,
+    "name": "Happy Harbor Public Library",
+    "shortname": "HHPL",
+    "opac_visible": true,
+    "parent_ou": 1
+  },
+  {
+    "id": 106,
+    "name": "Happy Harbor Public Library - Main Library",
+    "shortname": "HHPL-HHPL",
+    "opac_visible": true,
+    "parent_ou": 105
+  },
+  {
+    "id": 107,
+    "name": "Wakanda Public Library System",
+    "shortname": "WAKA",
+    "opac_visible": true,
+    "parent_ou": 1
+  },
+  {
+    "id": 108,
+    "name": "Wakanda Public Library - Main ",
+    "shortname": "WAKA-MAIN",
+    "opac_visible": true,
+    "parent_ou": 107
+  },
+  {
+    "id": 109,
+    "name": "Woonerf Bookmobile",
+    "shortname": "WAKA-BKM",
+    "opac_visible": true,
+    "parent_ou": 108
+  },
+  {
+    "id": 110,
+    "name": "T'Chaka Memorial Library",
+    "shortname": "WAKA-TML",
+    "opac_visible": true,
+    "parent_ou": 108
+  },
+  {
+    "id": 111,
+    "name": "Lake Victoria Library",
+    "shortname": "WAKA-LVL",
+    "opac_visible": true,
+    "parent_ou": 107
+  },
+  {
+    "id": 112,
+    "name": "Lake Turkana Library",
+    "shortname": "WAKA-LTL",
+    "opac_visible": true,
+    "parent_ou": 107
+  },
+  {
+    "id": 113,
+    "name": "Birnin Zana Public Library",
+    "shortname": "WAKA-BZPL",
+    "opac_visible": true,
+    "parent_ou": 107
+  },
+  {
+    "id": 114,
+    "name": "City Library",
+    "shortname": "SMALL-SMALL",
+    "opac_visible": true,
+    "parent_ou": 104
+  }
+]

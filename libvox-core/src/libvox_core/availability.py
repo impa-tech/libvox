@@ -74,9 +74,10 @@ def availability_for(
     have that" and "we have it and it is out" are different answers, and a
     placeholder would state the second when the first is true.
     """
-    from libvox_driver_koha import DriverError, KohaDriver
+    from libvox_driver_koha import DriverError
     from libvox_sync.credentials import fetch
     from libvox_sync.db import tenant_scope
+    from libvox_sync.drivers import ILS_TYPES, from_credentials
 
     # Duplicates are possible -- the MCP schema bounds the list at 20 and does
     # not enforce uniqueness -- and asking a library's server the same question
@@ -113,7 +114,7 @@ def availability_for(
     if credentials is None:
         logger.warning("%s has no ILS configured; availability cannot be asked", tenant_id)
         raise AvailabilityUnknown(f"{tenant_id} has no catalog connected")
-    if credentials.ils_type != "koha":
+    if credentials.ils_type not in ILS_TYPES:
         logger.warning(
             "%s runs %s, which has no driver", tenant_id, credentials.ils_type
         )
@@ -121,11 +122,7 @@ def availability_for(
 
     records: list[dict] = []
     failed: list[int] = []
-    driver = KohaDriver(
-        credentials.base_url,
-        client_id=credentials.client_id,
-        client_secret=credentials.client_secret,
-    )
+    driver = from_credentials(credentials)
     try:
         for biblio_id in wanted:
             try:
@@ -156,9 +153,10 @@ def availability_for(
                 }
             )
     finally:
-        # Stateless by contract: the driver holds an OAuth token for its own
-        # lifetime and no longer, so closing it here is what keeps one
-        # library's bearer from reaching another library's request.
+        # Stateless by contract: the driver holds its token or session for its
+        # own lifetime and no longer, so closing it here is what keeps one
+        # library's bearer from reaching another library's request -- and, for
+        # Evergreen, is what logs the session out.
         driver.close()
 
     if failed:

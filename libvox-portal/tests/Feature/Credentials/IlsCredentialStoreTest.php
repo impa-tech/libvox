@@ -263,3 +263,40 @@ test('the database refuses an OPAC address that is not http or https', function 
         "UPDATE tenant_ils SET opac_url = 'javascript:alert(1)' WHERE tenant_id = 'lib-furg'"
     ))->toThrow(QueryException::class);
 });
+
+test('an evergreen library stores its staff login in the same two columns', function () {
+    // Evergreen has no API key. The username goes where Koha's client id goes,
+    // the password where its secret goes -- encrypted, and with no way back.
+    store()->put(new IlsConnection(
+        tenantId: 'lib-furg',
+        ilsType: IlsType::Evergreen,
+        baseUrl: 'https://evergreen.example',
+        clientId: 'libvox-staff',
+    ), 'the-staff-password');
+
+    $row = DB::connection('pgsql_admin')->selectOne(
+        "SELECT ils_type, client_id, encode(client_secret_enc, 'escape') AS readable
+           FROM tenant_ils WHERE tenant_id = 'lib-furg'"
+    );
+
+    expect($row->ils_type)->toBe('evergreen')
+        ->and($row->client_id)->toBe('libvox-staff')
+        ->and($row->readable)->not->toContain('the-staff-password')
+        ->and(store()->describe('lib-furg')->connection->ilsType)->toBe(IlsType::Evergreen);
+});
+
+test('the database admits only the ils types a driver exists for', function () {
+    // The CHECK and the enum move together. FOLIO has no driver, so a library
+    // configured for it could never sync.
+    store()->put(connection(), 'the-actual-secret');
+
+    DB::connection('pgsql_admin')->update(
+        "UPDATE tenant_ils SET ils_type = 'evergreen' WHERE tenant_id = 'lib-furg'"
+    );
+
+    expect(fn () => DB::connection('pgsql_admin')->update(
+        "UPDATE tenant_ils SET ils_type = 'folio' WHERE tenant_id = 'lib-furg'"
+    ))->toThrow(QueryException::class);
+
+    expect(collect(IlsType::cases())->map->value->all())->toBe(['koha', 'evergreen']);
+});

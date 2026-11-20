@@ -19,7 +19,8 @@ psycopg[binary]>=3.2,<4
 
 # Siblings in this repository, not published packages. The Discovery Index
 # query and the credential decryption live in /libvox-sync; the ILS integration
-# lives in /libvox-driver-koha. Importing them is what keeps one definition of
+# lives in /libvox-driver-koha and /libvox-driver-evergreen. Importing them is what keeps one definition of
 # each.
 -e ../libvox-sync
 -e ../libvox-driver-koha
+-e ../libvox-driver-evergreen

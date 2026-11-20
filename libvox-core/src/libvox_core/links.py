@@ -39,7 +39,13 @@ def _koha(opac_url: str) -> Builder:
     return lambda biblio_id: record_url(opac_url, biblio_id)
 
 
-_BUILDERS: dict[str, Callable[[str], Builder]] = {"koha": _koha}
+def _evergreen(opac_url: str) -> Builder:
+    from libvox_driver_evergreen import record_url
+
+    return lambda biblio_id: record_url(opac_url, biblio_id)
+
+
+_BUILDERS: dict[str, Callable[[str], Builder]] = {"koha": _koha, "evergreen": _evergreen}
 
 _SAFE_SCHEME = re.compile(r"^https?://", re.IGNORECASE)
 

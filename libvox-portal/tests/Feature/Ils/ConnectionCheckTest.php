@@ -102,3 +102,55 @@ test('the page offers the test, and shows what came back', function () {
         expect($page->instance()->check['detail'])->toContain('403');
     });
 });
+
+test('choosing evergreen asks for a username and a password', function () {
+    DB::connection('pgsql_admin')->statement('TRUNCATE tenants, users, model_has_roles, roles CASCADE');
+    seed_roles();
+    Tenant::create(['tenant_id' => 'lib-furg', 'display_name' => 'lib-furg']);
+
+    Filament::setCurrentPanel('library');
+
+    app(TenantScope::class)->run('lib-furg', function () {
+        $page = Livewire\Livewire::actingAs(librarian('lib-furg'))
+            ->test(CatalogConnection::class)
+            ->assertSee(__('portal.ils.client_id'))
+            ->set('data.ils_type', 'evergreen');
+
+        // Same columns, other words: Evergreen has no API key.
+        $page->assertOk()
+            ->assertSee(__('portal.ils.evergreen.client_id'))
+            ->assertSee(__('portal.ils.evergreen.client_secret'))
+            ->assertSee(__('portal.ils.evergreen.section.credentials'))
+            ->assertDontSee(__('portal.ils.client_secret'));
+    });
+});
+
+test('an evergreen library is told about its login, not a koha permission', function () {
+    DB::connection('pgsql_admin')->statement('TRUNCATE tenants, users, model_has_roles, roles CASCADE');
+    seed_roles();
+    Tenant::create(['tenant_id' => 'lib-furg', 'display_name' => 'lib-furg']);
+
+    Http::fake(['*' => Http::response([
+        'ok' => false,
+        'problem' => 'unauthorized',
+        'detail' => "Evergreen refused the login for 'libvox' (HTTP 401, LOGIN_FAILED).",
+        'records_seen' => 0,
+    ])]);
+
+    Filament::setCurrentPanel('library');
+
+    app(TenantScope::class)->run('lib-furg', function () {
+        $page = Livewire\Livewire::actingAs(librarian('lib-furg'))
+            ->test(CatalogConnection::class)
+            ->set('data.ils_type', 'evergreen')
+            ->call('testConnection');
+
+        expect($page->instance()->checkMessage())
+            ->toBe(__('portal.ils.evergreen.check.unauthorized'))
+            ->not->toContain('Koha');
+
+        // A sentence with no Evergreen version falls back to the shared one.
+        expect($page->instance()->forType('check.not_configured', 'evergreen'))
+            ->toBe(__('portal.ils.check.not_configured'));
+    });
+});

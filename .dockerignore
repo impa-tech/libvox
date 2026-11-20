@@ -11,6 +11,7 @@
 
 !libvox-sync
 !libvox-driver-koha
+!libvox-driver-evergreen
 !libvox-core
 
 # Nothing below belongs in an image, and .env in particular must never be

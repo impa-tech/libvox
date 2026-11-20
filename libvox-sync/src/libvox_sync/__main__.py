@@ -24,7 +24,7 @@ from .db import (
     connect_tenant,
     tenant_scope,
 )
-from .drivers import DriverError, KohaDriver, iter_records
+from .drivers import ILS_TYPES, DriverError, KohaDriver, from_credentials, iter_records
 from .embedding import Embedder, EmbeddingSettings
 from .pipeline import (
     DEFAULT_BATCH_SIZE,
@@ -93,6 +93,17 @@ def _build_koha(args: argparse.Namespace):
     )
 
 
+def _build_evergreen(args: argparse.Namespace):
+    from libvox_driver_evergreen import EvergreenDriver
+
+    return EvergreenDriver(
+        os.environ["EVERGREEN_URL"],
+        username=os.environ["EVERGREEN_USERNAME"],
+        password=os.environ["EVERGREEN_PASSWORD"],
+        page_size=args.page_size,
+    )
+
+
 def _build_fixture(args: argparse.Namespace):
     from .drivers.fixture import FixtureDriver
 
@@ -109,24 +120,16 @@ def _build_fixture(args: argparse.Namespace):
 # driver exists would put a choice in --help that cannot work.
 DRIVERS: dict[str, tuple[tuple[str, ...], object]] = {
     "koha": (("KOHA_URL", "KOHA_CLIENT_ID", "KOHA_CLIENT_SECRET"), _build_koha),
+    "evergreen": (
+        ("EVERGREEN_URL", "EVERGREEN_USERNAME", "EVERGREEN_PASSWORD"),
+        _build_evergreen,
+    ),
     "fixture": ((), _build_fixture),
 }
 
 
-def _koha_driver(credentials, page_size: int):
-    return KohaDriver(
-        credentials.base_url,
-        client_id=credentials.client_id,
-        client_secret=credentials.client_secret,
-        page_size=page_size,
-    )
-
-
-# Keyed by the `ils_type` stored in the Tenant DB, which the portal constrains
-# to the same set. Adding 'folio' here before a FOLIO driver exists would make
-# a library configurable that can never sync — the same reason DRIVERS below
-# lists only what is implemented.
-BY_ILS_TYPE = {"koha": _koha_driver}
+# The ILS type stored in the Tenant DB picks the driver, through the same
+# function Core uses -- `drivers.from_credentials`.
 
 
 def _driver_from_tenant(settings: Settings, tenant_id: str, page_size: int):
@@ -155,14 +158,9 @@ def _driver_from_tenant(settings: Settings, tenant_id: str, page_size: int):
         )
 
     try:
-        build = BY_ILS_TYPE[credentials.ils_type]
-    except KeyError:
-        raise SystemExit(
-            f"no driver for ILS type {credentials.ils_type!r}; "
-            f"available: {', '.join(sorted(BY_ILS_TYPE))}"
-        ) from None
-
-    return build(credentials, page_size)
+        return from_credentials(credentials, page_size=page_size)
+    except DriverError as exc:
+        raise SystemExit(exc.message) from None
 
 
 def _build_driver(args: argparse.Namespace):
@@ -210,7 +208,11 @@ def cmd_tenant_set(settings: Settings, args: argparse.Namespace) -> int:
     from .credentials import ILSCredentials, store
 
     crypto_key = settings.require_crypto_key()
-    secret = _read_secret("KOHA_CLIENT_SECRET")
+    # The secret's variable follows the ILS: Koha's OAuth secret, or the
+    # password of an Evergreen staff account.
+    secret = _read_secret(
+        "EVERGREEN_PASSWORD" if args.ils == "evergreen" else "KOHA_CLIENT_SECRET"
+    )
 
     credentials = ILSCredentials(
         tenant_id=args.tenant,
@@ -626,10 +628,14 @@ def build_parser() -> argparse.ArgumentParser:
     tenant_set = tenant_sub.add_parser("set", help="Store or replace credentials.")
     tenant_set.add_argument("--tenant", required=True, help="Tenant identifier.")
     tenant_set.add_argument(
-        "--ils", required=True, choices=["koha"], help="Which ILS this library runs."
+        "--ils", required=True, choices=list(ILS_TYPES), help="Which ILS this library runs."
     )
     tenant_set.add_argument("--url", required=True, help="ILS base URL.")
-    tenant_set.add_argument("--client-id", required=True, help="OAuth2 client id.")
+    tenant_set.add_argument(
+        "--client-id",
+        required=True,
+        help="Koha OAuth2 client id, or the Evergreen staff username.",
+    )
     # No --client-secret: the secret comes from KOHA_CLIENT_SECRET or a hidden
     # prompt. An argument would land in /proc/<pid>/cmdline and shell history.
 

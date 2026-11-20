@@ -67,6 +67,12 @@ def test_no_address_no_driver_no_unsafe_scheme_means_no_builder() -> None:
     assert builder_for("koha", "javascript:alert(1)//") is None
 
 
+def test_an_evergreen_library_links_to_its_own_opac() -> None:
+    build = builder_for("evergreen", "https://catalogo.example/eg/opac/home")
+    assert build is not None
+    assert build(42) == "https://catalogo.example/eg/opac/record/42"
+
+
 def _search(records: list[dict]) -> ToolCall:
     return ToolCall("search_catalog", {}, result={"records": records})
 

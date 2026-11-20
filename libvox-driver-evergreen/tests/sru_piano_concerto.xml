@@ -1,0 +1,232 @@
+<?xml version='1.0'?>
+
+<searchRetrieveResponse xmlns="http://www.loc.gov/zing/srw/">
+<version>1.1</version>
+<numberOfRecords>28</numberOfRecords>
+<records>
+<record><recordSchema>info:srw/schema/1/marcxml-v1.1</recordSchema><recordPacking>xml</recordPacking><recordData>
+<record
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.loc.gov/MARC21/slim http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd"
+    xmlns="http://www.loc.gov/MARC21/slim">
+
+  <leader>00995njm a2200301 a 4500</leader>
+  <controlfield tag="001">88</controlfield>
+  <controlfield tag="003">CONS</controlfield>
+  <controlfield tag="005">20000115151600.0</controlfield>
+  <controlfield tag="007">s </controlfield>
+  <controlfield tag="008">970701s1986 nyu 00 eng u</controlfield>
+  <datafield tag="050" ind1="0" ind2="0">
+    <subfield code="a">1552</subfield>
+  </datafield>
+  <datafield tag="100" ind1="1" ind2=" ">
+    <subfield code="a">Carter, Elliott,</subfield>
+    <subfield code="d">1908-</subfield>
+  </datafield>
+  <datafield tag="245" ind1="0" ind2="0">
+    <subfield code="a">Piano concerto ;</subfield>
+    <subfield code="b">Variations for orchestra</subfield>
+  </datafield>
+  <datafield tag="260" ind1=" " ind2=" ">
+    <subfield code="a">New York, NY :</subfield>
+    <subfield code="b">New World Records,</subfield>
+    <subfield code="c">1986.</subfield>
+  </datafield>
+  <datafield tag="300" ind1=" " ind2=" ">
+    <subfield code="a">1 sound disc :</subfield>
+    <subfield code="b">stereo.</subfield>
+  </datafield>
+  <datafield tag="349" ind1=" " ind2=" ">
+    <subfield code="a">COMPACT DISC(S)</subfield>
+  </datafield>
+  <datafield tag="440" ind1=" " ind2="0">
+    <subfield code="a">Recorded Anthology of American Music.</subfield>
+  </datafield>
+  <datafield tag="500" ind1=" " ind2=" ">
+    <subfield code="a">Ursula Oppens, piano ; Cincinnati Symphony Orchestra ; Michael Gielen, conductor.</subfield>
+  </datafield>
+  <datafield tag="500" ind1=" " ind2=" ">
+    <subfield code="a">Durations: 22:35 ; 22:17.</subfield>
+  </datafield>
+  <datafield tag="650" ind1=" " ind2="0">
+    <subfield code="a">Concertos (Piano)</subfield>
+  </datafield>
+  <datafield tag="650" ind1=" " ind2="0">
+    <subfield code="a">Variations (Orchestra)</subfield>
+  </datafield>
+  <datafield tag="700" ind1="1" ind2=" ">
+    <subfield code="a">Oppens, Ursula</subfield>
+  </datafield>
+  <datafield tag="700" ind1="1" ind2=" ">
+    <subfield code="a">Gielen, Michael,</subfield>
+    <subfield code="d">1927-</subfield>
+  </datafield>
+  <datafield tag="710" ind1="2" ind2=" ">
+    <subfield code="a">Cincinnati Symphony Orchestra</subfield>
+  </datafield>
+  <datafield tag="730" ind1="0" ind2=" ">
+    <subfield code="a">Works. Selections</subfield>
+  </datafield>
+  <datafield tag="730" ind1="0" ind2=" ">
+    <subfield code="a">Variations, </subfield>
+    <subfield code="s">orchestra.</subfield>
+  </datafield>
+  <datafield tag="856" ind1="4" ind2="0">
+    <subfield code="u">http://example.com/</subfield>
+    <subfield code="y">Link text here</subfield>
+    <subfield code="z">Public note here</subfield>
+  </datafield>
+  <datafield tag="856" ind1="4" ind2="0">
+    <subfield code="u">http://example.com/</subfield>
+    <subfield code="y">Link text here</subfield>
+    <subfield code="z">Public note here</subfield>
+    <subfield code="9">SYS1</subfield>
+  </datafield>
+  <datafield tag="901" ind1=" " ind2=" ">
+    <subfield code="a">88</subfield>
+    <subfield code="b">AUTOGEN</subfield>
+    <subfield code="c">88</subfield>
+    <subfield code="t">biblio</subfield>
+  </datafield>
+</record>
+</recordData><recordPosition>1</recordPosition></record>
+<record><recordSchema>info:srw/schema/1/marcxml-v1.1</recordSchema><recordPacking>xml</recordPacking><recordData>
+<record
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.loc.gov/MARC21/slim http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd"
+    xmlns="http://www.loc.gov/MARC21/slim">
+
+  <leader>00800ncm a2200241 a 4500</leader>
+  <controlfield tag="001">45</controlfield>
+  <controlfield tag="003">CONS</controlfield>
+  <controlfield tag="005">20010920111220.0</controlfield>
+  <controlfield tag="008">970701s1988 nyu 00 eng </controlfield>
+  <datafield tag="010" ind1=" " ind2=" ">
+    <subfield code="a">88-752833</subfield>
+  </datafield>
+  <datafield tag="020" ind1=" " ind2=" ">
+    <subfield code="a">0486258351</subfield>
+  </datafield>
+  <datafield tag="050" ind1="0" ind2="0">
+    <subfield code="a">M1010.C52</subfield>
+    <subfield code="b">OP.11 1988</subfield>
+  </datafield>
+  <datafield tag="100" ind1="1" ind2=" ">
+    <subfield code="a">Chopin, Fr&#xE9;d&#xE9;ric,</subfield>
+    <subfield code="d">1810-1849</subfield>
+  </datafield>
+  <datafield tag="245" ind1="0" ind2="4">
+    <subfield code="a">The piano concertos.</subfield>
+  </datafield>
+  <datafield tag="260" ind1=" " ind2=" ">
+    <subfield code="a">New York, NY :</subfield>
+    <subfield code="b">Dover,</subfield>
+    <subfield code="c">1988.</subfield>
+  </datafield>
+  <datafield tag="300" ind1=" " ind2=" ">
+    <subfield code="a">1 score (164 p.)</subfield>
+  </datafield>
+  <datafield tag="349" ind1=" " ind2=" ">
+    <subfield code="a">MUSIC SCORE/PARTITION MUSICALE</subfield>
+  </datafield>
+  <datafield tag="500" ind1=" " ind2=" ">
+    <subfield code="a">Reprint. Originally published: Leipzig : Breitkopf &amp; H&#xE4;rtel.</subfield>
+  </datafield>
+  <datafield tag="505" ind1="0" ind2=" ">
+    <subfield code="a">No. 1 in E minor, op. 11 -- No. 2 in F minor, op. 21.</subfield>
+  </datafield>
+  <datafield tag="650" ind1=" " ind2="0">
+    <subfield code="a">Concertos (Piano)</subfield>
+    <subfield code="v">Scores.</subfield>
+  </datafield>
+  <datafield tag="730" ind1="0" ind2=" ">
+    <subfield code="a">Concertos, piano.</subfield>
+  </datafield>
+  <datafield tag="901" ind1=" " ind2=" ">
+    <subfield code="a">45</subfield>
+    <subfield code="b">AUTOGEN</subfield>
+    <subfield code="c">45</subfield>
+    <subfield code="t">biblio</subfield>
+  </datafield>
+</record>
+</recordData><recordPosition>2</recordPosition></record>
+<record><recordSchema>info:srw/schema/1/marcxml-v1.1</recordSchema><recordPacking>xml</recordPacking><recordData>
+<record
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.loc.gov/MARC21/slim http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd"
+    xmlns="http://www.loc.gov/MARC21/slim">
+
+  <leader>01132njm a2200301 a 4500</leader>
+  <controlfield tag="001">47</controlfield>
+  <controlfield tag="003">CONS</controlfield>
+  <controlfield tag="005">19991211180908.0</controlfield>
+  <controlfield tag="007">s </controlfield>
+  <controlfield tag="008">970701n nyu 00 eng u</controlfield>
+  <datafield tag="050" ind1="0" ind2="0">
+    <subfield code="a">1306</subfield>
+  </datafield>
+  <datafield tag="100" ind1="1" ind2=" ">
+    <subfield code="a">Rachmaninoff, Sergei,</subfield>
+    <subfield code="d">1873-1943</subfield>
+  </datafield>
+  <datafield tag="245" ind1="0" ind2="4">
+    <subfield code="a">The four Rachmaninoff concertos ;</subfield>
+    <subfield code="b">Rhapsody on a theme of Raganini.</subfield>
+  </datafield>
+  <datafield tag="260" ind1=" " ind2=" ">
+    <subfield code="a">New York, NY :</subfield>
+    <subfield code="b">RCA Victor</subfield>
+  </datafield>
+  <datafield tag="300" ind1=" " ind2=" ">
+    <subfield code="a">3 sound discs :</subfield>
+    <subfield code="b">33 1/3 rpm, mono.</subfield>
+  </datafield>
+  <datafield tag="349" ind1=" " ind2=" ">
+    <subfield code="a">PHONO RECORD</subfield>
+  </datafield>
+  <datafield tag="500" ind1=" " ind2=" ">
+    <subfield code="a">Red Seal Collectors Issue</subfield>
+  </datafield>
+  <datafield tag="500" ind1=" " ind2=" ">
+    <subfield code="a">Sergei Rachmaninoff, piano ; Philadelphia Orchestra ; Eugene Ormandy, Leopold Stokowski, conductors.</subfield>
+  </datafield>
+  <datafield tag="500" ind1=" " ind2=" ">
+    <subfield code="a">Program notes (6 p.) include essay "As I saw Rachmaninoff" by Abram Chasins.</subfield>
+  </datafield>
+  <datafield tag="650" ind1=" " ind2="0">
+    <subfield code="a">Concertos (Piano)</subfield>
+  </datafield>
+  <datafield tag="650" ind1=" " ind2="0">
+    <subfield code="a">Variations (Piano with orchestra)</subfield>
+  </datafield>
+  <datafield tag="700" ind1="1" ind2=" ">
+    <subfield code="a">Ormandy, Eugene,</subfield>
+    <subfield code="d">1899-1985.</subfield>
+  </datafield>
+  <datafield tag="700" ind1="1" ind2=" ">
+    <subfield code="a">Stokowski, Leopold,</subfield>
+    <subfield code="d">1882-1977</subfield>
+  </datafield>
+  <datafield tag="710" ind1="2" ind2=" ">
+    <subfield code="a">Philadelphia Orchestra</subfield>
+  </datafield>
+  <datafield tag="730" ind1="0" ind2=" ">
+    <subfield code="a">Concertos, piano.</subfield>
+  </datafield>
+  <datafield tag="730" ind1=" " ind2=" ">
+    <subfield code="a">Rapsodie sur un th&#xE8;me de Paganini, piano, orchestra</subfield>
+  </datafield>
+  <datafield tag="901" ind1=" " ind2=" ">
+    <subfield code="a">47</subfield>
+    <subfield code="b">AUTOGEN</subfield>
+    <subfield code="c">47</subfield>
+    <subfield code="t">biblio</subfield>
+  </datafield>
+</record>
+</recordData><recordPosition>3</recordPosition></record>
+</records>
+
+<extraResponseData></extraResponseData> 
+<echoedSearchRetrieveRequest><version>1.1</version><query>title="piano concerto"</query><maximumRecords>3</maximumRecords><xQuery><searchClause xmlns="http://www.loc.gov/zing/cql/xcql/"><index>title</index><relation><value>=</value></relation><term>piano concerto</term></searchClause></xQuery></echoedSearchRetrieveRequest>
+</searchRetrieveResponse>
+

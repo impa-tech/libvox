@@ -14,3 +14,4 @@ psycopg[binary]>=3.2,<4
 # means two definitions of what a title is, and the live path and the bulk
 # path have to agree about the same book.
 -e ../libvox-driver-koha
+-e ../libvox-driver-evergreen
