@@ -420,11 +420,20 @@ answer. In the model's `litellm_params`:
 ```jsonc
 {
   "model": "ollama_chat/granite4.2:latest",   // the prefix, per LiteLLM's docs
-  "custom_llm_provider": "ollama_chat"
+  "custom_llm_provider": "ollama_chat",
+  "api_base": "http://ollama:11434"           // the UI's "API Base" field
 }
 ```
 
 The public `model_name` does not change, so `LIBVOX_LLM_MODEL` does not either.
+
+**Set `api_base` on every model, including one added through the UI.** Left
+empty, LiteLLM falls back to `http://localhost:11434`, and inside LiteLLM's
+container `localhost` is LiteLLM itself. The model is accepted and listed, and
+the first request fails with `Cannot connect to host localhost:11434`.
+`http://ollama:11434` is Ollama's service name on the network the two
+containers share; on another deployment it is whatever address LiteLLM reaches
+Ollama by.
 
 One request tells you which shape you have:
 
