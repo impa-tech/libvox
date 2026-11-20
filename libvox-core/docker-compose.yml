@@ -61,6 +61,10 @@ services:
       # by default, which sends exactly what was always sent.
       LIBVOX_LLM_EXTRA_BODY: ${LIBVOX_LLM_EXTRA_BODY:-}
 
+      # How long to wait on /libvox-mcp. Must exceed its LIBVOX_CORE_TIMEOUT
+      # (150 in its compose): each timeout outlasts the one it waits on.
+      LIBVOX_MCP_TIMEOUT_S: ${LIBVOX_MCP_TIMEOUT_S:-180}
+
       # Byte-identical to /libvox-portal's, or nothing decrypts.
       LIBVOX_CRYPTO_KEY: ${LIBVOX_CRYPTO_KEY:?set LIBVOX_CRYPTO_KEY in .env}
 

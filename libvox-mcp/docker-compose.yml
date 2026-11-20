@@ -68,6 +68,13 @@ services:
 
       LIBVOX_LOG_LEVEL: ${LIBVOX_LOG_LEVEL:-INFO}
 
+      # How long to wait on Core, which waits on the library's own server. One
+      # check_availability is up to six sequential requests to a Koha, paced by
+      # the driver, and a slow Koha (seen: 3-17s each) spends most of sixty
+      # seconds. Must stay below Core's LIBVOX_MCP_TIMEOUT_S. Its own name
+      # here, so the host-run .env value does not leak into the container.
+      LIBVOX_CORE_TIMEOUT: ${LIBVOX_CORE_TIMEOUT_DOCKER:-150}
+
     # It answers Core, and Core is restarted often. Coming back on its own is
     # the whole point of moving it in here.
     restart: unless-stopped
